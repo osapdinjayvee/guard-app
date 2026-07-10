@@ -1,0 +1,19 @@
+{
+  "data": {
+    "id": 504,
+    "client_uuid": "00000000-0000-4000-8000-000000000000",
+    "user_id": 7,
+    "qr_checkpoint_id": 1,
+    "checkpoint_code": "GATE-A",
+    "attendance_type": "TIME_IN",
+    "selfie_url": "https://api.example.invalid/storage/attendance/504.jpg",
+    "captured_at": "2026-07-10T06:00:00+08:00",
+    "received_at": "2026-07-10T06:00:02+08:00",
+    "latitude": 14.599512,
+    "longitude": 120.984222,
+    "accuracy": 9.1,
+    "duties_acknowledged": true,
+    "duties_version_id": 12,
+    "device_id": null
+  }
+}

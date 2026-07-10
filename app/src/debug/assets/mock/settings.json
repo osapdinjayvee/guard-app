@@ -1,0 +1,10 @@
+{
+  "data": {
+    "gps_accuracy_threshold_m": 50.0,
+    "gps_failure_policy": "block",
+    "gps_timeout_seconds": 15,
+    "image_quality": 80,
+    "image_max_dimension_px": 1600,
+    "maintenance_message": null
+  }
+}

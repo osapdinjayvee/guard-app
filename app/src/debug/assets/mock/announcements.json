@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "id": 3,
+      "title": "Payroll cut-off moved",
+      "content": "The payroll cut-off for July is moved to the 25th."
+    },
+    {
+      "id": 4,
+      "title": "New checkpoint at Tower 1",
+      "content": "LOBBY-1 is now active. Scan it at the start of every shift."
+    }
+  ]
+}

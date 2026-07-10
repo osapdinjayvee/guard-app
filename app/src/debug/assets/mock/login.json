@@ -1,0 +1,11 @@
+{
+  "token": "mock-sanctum-token-do-not-use-in-production",
+  "user": {
+    "id": 7,
+    "name": "Juan Dela Cruz",
+    "username": "guard01",
+    "email": "juan.delacruz@example.com",
+    "role": "guard",
+    "status": "active"
+  }
+}

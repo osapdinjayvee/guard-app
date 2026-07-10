@@ -1,0 +1,56 @@
+{
+  "data": [
+    {
+      "id": 501,
+      "client_uuid": "0b7d1a54-4b2f-4a2d-9c0f-9c1e5f2a1111",
+      "user_id": 7,
+      "qr_checkpoint_id": 1,
+      "checkpoint_code": "GATE-A",
+      "attendance_type": "TIME_IN",
+      "selfie_url": "https://api.example.invalid/storage/attendance/501.jpg",
+      "captured_at": "2026-07-09T06:02:11+08:00",
+      "received_at": "2026-07-09T06:02:14+08:00",
+      "latitude": 14.599512,
+      "longitude": 120.984222,
+      "accuracy": 8.4,
+      "duties_acknowledged": true,
+      "duties_version_id": 12,
+      "device_id": "emulator-5554"
+    },
+    {
+      "id": 502,
+      "client_uuid": "0b7d1a54-4b2f-4a2d-9c0f-9c1e5f2a2222",
+      "user_id": 7,
+      "qr_checkpoint_id": 1,
+      "checkpoint_code": "GATE-A",
+      "attendance_type": "TIME_OUT",
+      "selfie_url": "https://api.example.invalid/storage/attendance/502.jpg",
+      "captured_at": "2026-07-09T18:11:03+08:00",
+      "received_at": "2026-07-09T21:47:52+08:00",
+      "latitude": 14.599498,
+      "longitude": 120.984190,
+      "accuracy": 22.7,
+      "duties_acknowledged": true,
+      "duties_version_id": 12,
+      "device_id": "emulator-5554"
+    },
+    {
+      "id": 503,
+      "client_uuid": "0b7d1a54-4b2f-4a2d-9c0f-9c1e5f2a3333",
+      "user_id": 7,
+      "qr_checkpoint_id": 3,
+      "checkpoint_code": "LOBBY-1",
+      "attendance_type": "TIME_IN",
+      "selfie_url": "https://api.example.invalid/storage/attendance/503.jpg",
+      "captured_at": "2026-07-10T05:58:40+08:00",
+      "received_at": "2026-07-10T05:58:43+08:00",
+      "latitude": null,
+      "longitude": null,
+      "accuracy": null,
+      "duties_acknowledged": true,
+      "duties_version_id": 12,
+      "device_id": null
+    }
+  ],
+  "meta": { "page": 1, "per_page": 25, "total": 3 }
+}

@@ -7,6 +7,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -24,7 +25,10 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun okHttpClient(): OkHttpClient {
+    fun okHttpClient(
+        // Empty in release. The debug source set contributes the mock API interceptor.
+        interceptors: Set<@JvmSuppressWildcards Interceptor>,
+    ): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             // BODY would print the Sanctum token on every authenticated call.
             level = if (BuildConfig.DEBUG) {
@@ -36,6 +40,7 @@ object NetworkModule {
         }
 
         return OkHttpClient.Builder()
+            .apply { interceptors.forEach(::addInterceptor) }
             .addInterceptor(logging)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

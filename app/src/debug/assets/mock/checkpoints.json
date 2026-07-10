@@ -1,0 +1,44 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "code": "GATE-A",
+      "name": "Main Gate",
+      "description": "North entrance, vehicle barrier",
+      "latitude": 14.599512,
+      "longitude": 120.984222,
+      "status": "ACTIVE",
+      "updated_at": "2026-07-01T08:00:00+08:00"
+    },
+    {
+      "id": 2,
+      "code": "GATE-B",
+      "name": "Service Entrance",
+      "description": null,
+      "latitude": 14.600100,
+      "longitude": 120.985010,
+      "status": "ACTIVE",
+      "updated_at": "2026-07-01T08:00:00+08:00"
+    },
+    {
+      "id": 3,
+      "code": "LOBBY-1",
+      "name": "Tower 1 Lobby",
+      "description": "Reception desk",
+      "latitude": null,
+      "longitude": null,
+      "status": "ACTIVE",
+      "updated_at": "2026-07-02T09:30:00+08:00"
+    },
+    {
+      "id": 4,
+      "code": "ROOF-OLD",
+      "name": "Rooftop (decommissioned)",
+      "description": "Retained so the client can say 'disabled', not 'unknown'",
+      "latitude": null,
+      "longitude": null,
+      "status": "DISABLED",
+      "updated_at": "2026-06-15T10:00:00+08:00"
+    }
+  ]
+}

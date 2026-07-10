@@ -2,7 +2,9 @@ package com.appetiser.guardapp.core.di
 
 import android.content.Context
 import androidx.room.Room
+import com.appetiser.guardapp.core.database.AttendanceDao
 import com.appetiser.guardapp.core.database.CheckpointDao
+import com.appetiser.guardapp.core.database.DutyDao
 import com.appetiser.guardapp.core.database.GuardDatabase
 import dagger.Module
 import dagger.Provides
@@ -25,4 +27,10 @@ object DatabaseModule {
 
     @Provides
     fun checkpointDao(database: GuardDatabase): CheckpointDao = database.checkpointDao()
+
+    @Provides
+    fun attendanceDao(database: GuardDatabase): AttendanceDao = database.attendanceDao()
+
+    @Provides
+    fun dutyDao(database: GuardDatabase): DutyDao = database.dutyDao()
 }

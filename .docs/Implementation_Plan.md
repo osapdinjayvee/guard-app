@@ -18,6 +18,7 @@ The single largest risk in the first draft of this plan was "can the target stac
 | Is a separate `kotlin-android` plugin needed for Compose? | **No.** Only `org.jetbrains.kotlin.plugin.compose:2.2.10`. | Spike built without it. |
 | Does KSP work? | **Yes, but only with a flag.** | Fails at configuration: *"Using kotlin.sourceSets DSL to add Kotlin sources is not allowed with built-in Kotlin."* Requires `android.disallowKotlinSourceSets=false` in `gradle.properties`. |
 | Does Room work? | **Only ≥ 2.7.x.** | Room **2.6.1 fails** under KSP2/Kotlin 2.2 with `IllegalStateException: unexpected jvm signature V`. **Room 2.7.1 succeeds** and generates `GuardDatabase_Impl.kt`. |
+| Does Hilt work? | **Only ≥ ~2.58.** | Hilt **2.57.1 fails**: `Failed to apply plugin 'com.google.dagger.hilt.android' > Android BaseExtension not found` — AGP 9 removed the legacy extension API the plugin reads. **Hilt 2.60.1 succeeds**; `Hilt_GuardApp`, `Hilt_MainActivity`, and `HomeViewModel_HiltModules` all land in the APK. |
 
 ### Verified-good pin set
 
@@ -27,8 +28,11 @@ ksp         = "2.2.10-2.0.2"    # Kotlin-version-locked
 composeBom  = "2024.09.00"
 activityCompose = "1.9.3"
 room        = "2.7.1"           # 2.6.1 is BROKEN here
+hilt        = "2.60.1"          # 2.57.1 is BROKEN here (no AGP 9 support)
 coreKtx     = "1.17.0"          # do not bump: 1.19.0 needs compileSdk 37 + AGP 9.1.0 + Gradle 9.3.1
 ```
+
+This exact set was built together — Compose + KSP + Room + Hilt in one app, with an `@HiltAndroidApp` application, a `@Module` providing Room, an `@Inject constructor` repository, a `@HiltViewModel`, and `hiltViewModel()` inside a composable. It produces a working APK.
 
 ```properties
 # gradle.properties — required for KSP (Room/Hilt/Moshi codegen) under built-in Kotlin
@@ -37,7 +41,7 @@ android.disallowKotlinSourceSets=false
 
 `org.jetbrains.kotlin.plugin.compose` and `com.google.devtools.ksp` resolve from `gradlePluginPortal()`/`mavenCentral()`, **not** the content-filtered `google()` in `settings.gradle.kts`. No repository changes needed.
 
-**Still unverified:** Hilt's Gradle plugin + bytecode transform under AGP 9 built-in Kotlin. It uses KSP, which now works, so this is likely fine — but treat T-4 as the remaining spike. Fallback is manual constructor injection.
+**No toolchain spikes remain.** Compose, KSP, Room, and Hilt are all verified together on this exact toolchain. Two of the four needed a version floor that nothing in the docs would have told you about, and both failed in ways that look like unrelated bugs: Room 2.6.1 dies inside the KSP processor, and Hilt 2.57.1 dies at plugin application. **Pin the versions above rather than picking "the version the tutorial used."**
 
 **Ceiling warning:** every new androidx dependency must be checked against `compileSdk 36`. Recent releases increasingly demand 37 and will fail `checkDebugAarMetadata`, exactly as `core-ktx:1.19.0` does. Add dependencies in small batches and run `assembleDebug` after each.
 
@@ -126,7 +130,7 @@ Phase 1 runs **concurrently with Phase 0** — it is coordination work needing n
 | T-1 | Rename package off `com.example.guardapp` | 0 | S | — | `namespace` + `applicationId` are a real id; `assembleDebug` + `testDebugUnitTest` green |
 | T-2 | Apply verified pin set; enable Compose | 0 | S | T-1 | Catalog gains kotlin 2.2.10 / compose plugin / KSP 2.2.10-2.0.2 / Room 2.7.1; `android.disallowKotlinSourceSets=false` set; builds |
 | T-3 | `MainActivity` + launcher activity + M3 theme | 0 | M | T-2 | App installs and shows a Compose screen; Views/AppCompat theme retired |
-| T-4 | Wire Hilt *(remaining spike)* | 0 | M | T-3 | `@HiltAndroidApp` boots; a trivial `@Inject` resolves. **If the Hilt plugin fights AGP 9, fall back to constructor injection and record it** |
+| T-4 | Wire Hilt (2.60.1) | 0 | S | T-3 | `@HiltAndroidApp` boots; `@HiltViewModel` + `hiltViewModel()` resolve. Verified to work — do not use Hilt < 2.58 |
 | T-5 | Room + Retrofit on classpath, smoke DAO + service | 0 | S | T-4 | `@Entity`/`@Dao` generate `_Impl`; Retrofit interface compiles |
 | T-6 | Bottom nav scaffold, center Scan QR | 0 | M | T-3 | Home · History · **Scan** · Reports · Settings route to placeholders |
 | T-7 | CI: build + unit test + lint | 0 | S | T-1 | Runs `assembleDebug`, `testDebugUnitTest`, `lint` on JDK 21; green on a PR |
@@ -167,7 +171,7 @@ T-1 → T-2 → T-3 → T-4 → T-5 → T-11 → T-14 → T-17 → T-19 → T-20
 
 The contract chain `T-8 → T-9 → T-10` is a parallel prerequisite of T-12/T-14. **If it slips, it moves onto the critical path.** T-34 is gated by an external team.
 
-The two riskiest nodes are now **T-4** (the only remaining toolchain unknown) and **T-20/T-25** (evidence integrity and record durability). T-2 is no longer risky — it is a known-good pin set.
+All of Phase 0 is now de-risked: T-2 and T-4 are a known-good pin set, not spikes. The riskiest nodes on the path are **T-20** (evidence integrity — the watermark must be in the pixels) and **T-24/T-25** (record durability — the orphaned-`SYNCING` and lost-response holes). Those are correctness problems, not toolchain problems, and they will not announce themselves in a demo.
 
 ### Parallelization
 
@@ -205,7 +209,7 @@ Decisions that must be settled **before** networked code (T-9), because retrofit
 | R-3 | **Network-first write path.** Loses records offline. | Enforced in T-14/T-23; airplane-mode E2E in T-33. |
 | R-4 | Backend lags indefinitely. | Contract-first + stub (§5). Freeze the contract early so drift is small. |
 | R-5 | androidx version ceiling vs `compileSdk 36`. | Add deps in small batches; `assembleDebug` after each; keep the known-good pin set. |
-| R-6 | Hilt vs AGP 9 built-in Kotlin (unverified). | T-4 is a spike. Fallback: constructor injection. |
+| R-6 | ~~Hilt vs AGP 9~~ **Retired.** Verified working at 2.60.1. | Pin `hilt = "2.60.1"`. Versions < 2.58 fail with `Android BaseExtension not found`. |
 | R-7 | Hardcoded thresholds instead of `/api/settings`. | Settings repo is the only source; review rule: no numeric threshold constants in capture code. |
 | R-8 | Front-camera mirror / OOM in the burn-in path. | Normalize rotation, handle horizontal flip, downscale before drawing. |
 

@@ -1,6 +1,7 @@
 package com.appetiser.guardapp.core.di
 
 import com.appetiser.guardapp.BuildConfig
+import com.appetiser.guardapp.core.network.AuthInterceptor
 import com.appetiser.guardapp.core.network.GuardApi
 import com.squareup.moshi.Moshi
 import dagger.Module
@@ -26,6 +27,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun okHttpClient(
+        authInterceptor: AuthInterceptor,
         // Empty in release. The debug source set contributes the mock API interceptor.
         interceptors: Set<@JvmSuppressWildcards Interceptor>,
     ): OkHttpClient {
@@ -40,6 +42,10 @@ object NetworkModule {
         }
 
         return OkHttpClient.Builder()
+            // Auth first: the mock interceptor short-circuits the chain, so a later
+            // AuthInterceptor would never see a mocked request and the header would go
+            // untested until the real backend arrived.
+            .addInterceptor(authInterceptor)
             .apply { interceptors.forEach(::addInterceptor) }
             .addInterceptor(logging)
             .connectTimeout(15, TimeUnit.SECONDS)

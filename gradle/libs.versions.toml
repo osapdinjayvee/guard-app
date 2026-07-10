@@ -20,6 +20,7 @@ okhttp = "4.12.0"
 # compiler plugin to AGP 9's built-in Kotlin.
 moshi = "1.15.1"
 coroutines = "1.9.0"
+datastore = "1.1.1"
 # Do not bump: 1.19.0 requires compileSdk 37 + AGP 9.1.0 + Gradle 9.3.1.
 coreKtx = "1.17.0"
 junit = "4.13.2"
@@ -63,6 +64,7 @@ moshi = { group = "com.squareup.moshi", name = "moshi", version.ref = "moshi" }
 moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshi" }
 
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }

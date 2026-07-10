@@ -1,0 +1,20 @@
+# Normalize text to LF in the repository. Without this, core.autocrlf=true on
+# Windows checks shell scripts out with CRLF and they stop being executable
+# under Git Bash and on CI.
+* text=auto
+
+# Must stay LF: executed by /bin/sh.
+gradlew         text eol=lf
+.githooks/**    text eol=lf
+*.sh            text eol=lf
+
+# Must stay CRLF: executed by cmd.exe.
+*.bat           text eol=crlf
+
+# Never touch these.
+*.jar           binary
+*.webp          binary
+*.png           binary
+*.jpg           binary
+*.keystore      binary
+*.jks           binary

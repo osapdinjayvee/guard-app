@@ -1,0 +1,59 @@
+#!/bin/sh
+# Validates commit messages against Conventional Commits v1.0.0.
+# https://www.conventionalcommits.org/en/v1.0.0/
+#
+# Enabled via: git config core.hooksPath .githooks
+
+msg_file="$1"
+
+# First line that is not a comment and not blank.
+header=$(grep -v '^#' "$msg_file" | sed '/^[[:space:]]*$/d' | head -n 1)
+
+# Git's own generated messages and rebase helpers bypass the check.
+case "$header" in
+    "Merge "*|"Revert "*|"fixup!"*|"squash!"*|"amend!"*) exit 0 ;;
+esac
+
+types='build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test'
+
+# <type>[(scope)][!]: <description>
+if printf '%s' "$header" | grep -Eq "^(${types})(\([a-z0-9._/-]+\))?!?: .+"; then
+    # Guard the two mistakes the regex above still lets through.
+    if printf '%s' "$header" | grep -Eq ': +$'; then
+        echo "✗ Commit message has an empty description." >&2
+        exit 1
+    fi
+    if [ ${#header} -gt 100 ]; then
+        echo "✗ Commit subject is ${#header} characters; keep it under 100." >&2
+        exit 1
+    fi
+    exit 0
+fi
+
+cat >&2 <<EOF
+✗ Invalid commit message:
+
+    $header
+
+Expected Conventional Commits v1.0.0 format:
+
+    <type>[optional scope][!]: <description>
+
+  type         one of: build chore ci docs feat fix perf refactor revert style test
+  scope        optional, lowercase, e.g. (scanner) (attendance) (sync)
+  !            optional, marks a breaking change
+  description  required, present tense, no trailing period
+
+Examples:
+
+    feat(scanner): decode checkpoint QR codes
+    fix(sync): retry failed attendance uploads
+    refactor!: drop support for minSdk 24
+    chore(release): v0.1.0
+
+A breaking change is either a "!" before the colon, or a "BREAKING CHANGE:"
+footer in the commit body. Both trigger a major version bump on release.
+
+See https://www.conventionalcommits.org/en/v1.0.0/
+EOF
+exit 1

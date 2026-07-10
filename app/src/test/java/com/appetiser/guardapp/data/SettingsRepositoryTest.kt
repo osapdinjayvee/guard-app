@@ -13,6 +13,7 @@ import com.appetiser.guardapp.core.network.dto.PagedEnvelope
 import com.appetiser.guardapp.core.network.dto.ProfileDto
 import com.appetiser.guardapp.domain.model.AppSettings
 import com.appetiser.guardapp.domain.model.GpsFailurePolicy
+import com.appetiser.guardapp.testing.FakeGuardApi
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,15 +31,6 @@ class SettingsRepositoryTest {
         override suspend fun save(settings: AppSettings) { state.value = settings }
     }
 
-    private open class StubApi : GuardApi {
-        override suspend fun profile(): Envelope<ProfileDto> = error("unused")
-        override suspend fun checkpoints(): Envelope<List<CheckpointDto>> = error("unused")
-        override suspend fun duties(): Envelope<DutyDto> = error("unused")
-        override suspend fun announcements(): Envelope<List<AnnouncementDto>> = error("unused")
-        override suspend fun settings(): Envelope<MobileSettingsDto> = error("unused")
-        override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> = error("unused")
-    }
-
     private val cache = FakeSettingsCache()
     private val errors = ApiErrorMapper(Moshi.Builder().build())
 
@@ -46,7 +38,7 @@ class SettingsRepositoryTest {
 
     @Test
     fun `emits documented defaults before the first successful refresh`() = runTest {
-        val settings = repo(StubApi()).current()
+        val settings = repo(FakeGuardApi()).current()
 
         assertEquals(50f, settings.gpsAccuracyThresholdMetres, 0.01f)
         assertEquals(GpsFailurePolicy.BLOCK, settings.gpsFailurePolicy)
@@ -55,7 +47,7 @@ class SettingsRepositoryTest {
 
     @Test
     fun `refresh replaces the thresholds the capture flow reads`() = runTest {
-        val repository = repo(object : StubApi() {
+        val repository = repo(object : FakeGuardApi() {
             override suspend fun settings() = Envelope(
                 MobileSettingsDto(
                     gpsAccuracyThresholdM = 25f,
@@ -81,7 +73,7 @@ class SettingsRepositoryTest {
      */
     @Test
     fun `an unrecognised gps policy fails safe to BLOCK`() = runTest {
-        val repository = repo(object : StubApi() {
+        val repository = repo(object : FakeGuardApi() {
             override suspend fun settings() =
                 Envelope(MobileSettingsDto(gpsFailurePolicy = "permissive"))
         })
@@ -94,7 +86,7 @@ class SettingsRepositoryTest {
     @Test
     fun `a failed refresh keeps the last known thresholds`() = runTest {
         cache.save(AppSettings(gpsAccuracyThresholdMetres = 15f, gpsFailurePolicy = GpsFailurePolicy.ALLOW))
-        val repository = repo(object : StubApi() {
+        val repository = repo(object : FakeGuardApi() {
             override suspend fun settings(): Envelope<MobileSettingsDto> = throw IOException("offline")
         })
 

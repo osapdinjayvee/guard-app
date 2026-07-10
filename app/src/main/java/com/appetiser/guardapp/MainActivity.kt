@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.appetiser.guardapp.ui.navigation.GuardAppScaffold
+import com.appetiser.guardapp.ui.GuardApp
 import com.appetiser.guardapp.ui.theme.GuardAppTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             GuardAppTheme {
-                GuardAppScaffold()
+                GuardApp()
             }
         }
     }

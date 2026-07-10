@@ -61,3 +61,13 @@ interface AnnouncementRepository {
 
     suspend fun refresh(): ApiResult<Unit>
 }
+
+interface AuthRepository {
+    /** True while a session token is stored. Drives the auth gate. */
+    val isAuthenticated: Flow<Boolean>
+
+    suspend fun login(username: String, password: String): ApiResult<Unit>
+
+    /** Clears the local session. Never touches the attendance queue. */
+    suspend fun logout()
+}

@@ -7,7 +7,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -27,6 +30,9 @@ import javax.inject.Singleton
 class KeystoreTokenStore @Inject constructor(
     private val dataStore: DataStore<Preferences>,
 ) : TokenStore {
+
+    override val hasToken: Flow<Boolean> =
+        dataStore.data.map { it[CIPHERTEXT] != null }.distinctUntilChanged()
 
     override suspend fun token(): String? {
         val stored = dataStore.data.first()[CIPHERTEXT] ?: return null

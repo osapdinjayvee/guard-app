@@ -1,5 +1,7 @@
 package com.appetiser.guardapp.core.security
 
+import kotlinx.coroutines.flow.Flow
+
 /**
  * Where the Sanctum bearer token lives.
  *
@@ -7,6 +9,9 @@ package com.appetiser.guardapp.core.security
  * no successor. See `.docs/Implementation_Plan.md` §2.
  */
 interface TokenStore {
+
+    /** Emits whether a token is stored. Drives the auth gate. */
+    val hasToken: Flow<Boolean>
 
     /** Null when logged out, or when the ciphertext can no longer be decrypted. */
     suspend fun token(): String?

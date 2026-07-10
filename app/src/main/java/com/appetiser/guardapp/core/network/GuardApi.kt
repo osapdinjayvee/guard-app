@@ -5,10 +5,14 @@ import com.appetiser.guardapp.core.network.dto.AttendanceDto
 import com.appetiser.guardapp.core.network.dto.CheckpointDto
 import com.appetiser.guardapp.core.network.dto.DutyDto
 import com.appetiser.guardapp.core.network.dto.Envelope
+import com.appetiser.guardapp.core.network.dto.LoginRequest
+import com.appetiser.guardapp.core.network.dto.LoginResponse
 import com.appetiser.guardapp.core.network.dto.MobileSettingsDto
 import com.appetiser.guardapp.core.network.dto.PagedEnvelope
 import com.appetiser.guardapp.core.network.dto.ProfileDto
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Query
 
 /**
@@ -18,6 +22,13 @@ import retrofit2.http.Query
  * semantics depend on decision 1, which is not yet ratified.
  */
 interface GuardApi {
+
+    /** Unauthenticated. A 401 here means "wrong password", not "session expired". */
+    @POST("login")
+    suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    @POST("logout")
+    suspend fun logout()
 
     @GET("profile")
     suspend fun profile(): Envelope<ProfileDto>

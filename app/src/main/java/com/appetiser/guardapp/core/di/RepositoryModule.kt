@@ -3,6 +3,7 @@ package com.appetiser.guardapp.core.di
 import com.appetiser.guardapp.core.connectivity.ConnectivityNetworkMonitor
 import com.appetiser.guardapp.core.connectivity.NetworkMonitor
 import com.appetiser.guardapp.data.DataStoreSettingsCache
+import com.appetiser.guardapp.data.DefaultAuthRepository
 import com.appetiser.guardapp.data.DefaultAnnouncementRepository
 import com.appetiser.guardapp.data.DefaultAttendanceRepository
 import com.appetiser.guardapp.data.DefaultCheckpointRepository
@@ -12,6 +13,7 @@ import com.appetiser.guardapp.data.DefaultSettingsRepository
 import com.appetiser.guardapp.data.SettingsCache
 import com.appetiser.guardapp.domain.repository.AnnouncementRepository
 import com.appetiser.guardapp.domain.repository.AttendanceRepository
+import com.appetiser.guardapp.domain.repository.AuthRepository
 import com.appetiser.guardapp.domain.repository.CheckpointRepository
 import com.appetiser.guardapp.domain.repository.DutyRepository
 import com.appetiser.guardapp.domain.repository.ProfileRepository
@@ -57,4 +59,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindNetworkMonitor(impl: ConnectivityNetworkMonitor): NetworkMonitor
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthRepository(impl: DefaultAuthRepository): AuthRepository
 }

@@ -1,7 +1,7 @@
 package com.appetiser.guardapp.core.network
 
-import com.appetiser.guardapp.core.security.TokenStore
 import com.appetiser.guardapp.core.session.SessionEvents
+import com.appetiser.guardapp.testing.FakeTokenStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,13 +19,6 @@ import org.junit.Before
 import org.junit.Test
 
 class AuthInterceptorTest {
-
-    private class FakeTokenStore(var stored: String?) : TokenStore {
-        var clearCount = 0
-        override suspend fun token(): String? = stored
-        override suspend fun save(token: String) { stored = token }
-        override suspend fun clear() { stored = null; clearCount++ }
-    }
 
     private lateinit var server: MockWebServer
     private lateinit var tokenStore: FakeTokenStore

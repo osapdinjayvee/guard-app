@@ -15,6 +15,7 @@ import com.appetiser.guardapp.core.network.dto.MobileSettingsDto
 import com.appetiser.guardapp.core.network.dto.PagedEnvelope
 import com.appetiser.guardapp.core.network.dto.ProfileDto
 import com.appetiser.guardapp.domain.model.CheckpointResolution
+import com.appetiser.guardapp.testing.FakeGuardApi
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,15 +43,6 @@ class CheckpointRepositoryTest {
         override suspend fun count(): Int = rows.value.size
     }
 
-    private open class StubApi : GuardApi {
-        override suspend fun profile(): Envelope<ProfileDto> = error("unused")
-        override suspend fun checkpoints(): Envelope<List<CheckpointDto>> = error("unused")
-        override suspend fun duties(): Envelope<DutyDto> = error("unused")
-        override suspend fun announcements(): Envelope<List<AnnouncementDto>> = error("unused")
-        override suspend fun settings(): Envelope<MobileSettingsDto> = error("unused")
-        override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> = error("unused")
-    }
-
     private val clock = Clock { 1_000L }
     private val errors = ApiErrorMapper(Moshi.Builder().build())
     private val dao = FakeCheckpointDao()
@@ -63,7 +55,7 @@ class CheckpointRepositoryTest {
     @Test
     fun `resolves a cached checkpoint with no network at all`() = runTest {
         dao.upsertAll(listOf(dto(1, "GATE-A", "ACTIVE").toEntity(0)))
-        val repository = repo(object : StubApi() {
+        val repository = repo(object : FakeGuardApi() {
             override suspend fun checkpoints(): Envelope<List<CheckpointDto>> = throw IOException("offline")
         })
 
@@ -78,21 +70,21 @@ class CheckpointRepositoryTest {
     fun `a disabled checkpoint resolves as Disabled, not Unknown`() = runTest {
         dao.upsertAll(listOf(dto(4, "ROOF-OLD", "DISABLED").toEntity(0)))
 
-        val resolution = repo(StubApi()).resolve("ROOF-OLD")
+        val resolution = repo(FakeGuardApi()).resolve("ROOF-OLD")
 
         assertTrue("$resolution", resolution is CheckpointResolution.Disabled)
     }
 
     @Test
     fun `an unknown code resolves as Unknown`() = runTest {
-        val resolution = repo(StubApi()).resolve("NOT-A-CODE")
+        val resolution = repo(FakeGuardApi()).resolve("NOT-A-CODE")
 
         assertEquals(CheckpointResolution.Unknown("NOT-A-CODE"), resolution)
     }
 
     @Test
     fun `refresh caches the server list`() = runTest {
-        val repository = repo(object : StubApi() {
+        val repository = repo(object : FakeGuardApi() {
             override suspend fun checkpoints() =
                 Envelope(listOf(dto(1, "GATE-A", "ACTIVE"), dto(4, "ROOF-OLD", "DISABLED")))
         })
@@ -111,7 +103,7 @@ class CheckpointRepositoryTest {
     @Test
     fun `a failed refresh leaves the existing cache intact`() = runTest {
         dao.upsertAll(listOf(dto(1, "GATE-A", "ACTIVE").toEntity(0)))
-        val repository = repo(object : StubApi() {
+        val repository = repo(object : FakeGuardApi() {
             override suspend fun checkpoints(): Envelope<List<CheckpointDto>> = throw IOException("offline")
         })
 

@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.appetiser.guardapp.R
 import com.appetiser.guardapp.domain.model.GuardProfile
+import com.appetiser.guardapp.domain.repository.AuthRepository
 import com.appetiser.guardapp.domain.repository.ProfileRepository
 import com.appetiser.guardapp.ui.components.GuardCard
 import com.appetiser.guardapp.ui.components.ScreenTitle
@@ -42,14 +43,19 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class AccountViewModel @Inject constructor(
     profiles: ProfileRepository,
+    private val auth: AuthRepository,
 ) : ViewModel() {
     val profile: StateFlow<GuardProfile?> = profiles.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Clears the session. The auth gate observes it and swaps back to login on its own. */
+    fun signOut() = viewModelScope.launch { auth.logout() }
 }
 
 /**
@@ -87,7 +93,7 @@ fun AccountScreen(viewModel: AccountViewModel = hiltViewModel()) {
             Divider()
             AccountRow(R.drawable.ic_bell, "Notifications", "Announcements from the office")
             Divider()
-            AccountRow(R.drawable.ic_send, "Sign out", "Clear this session on the device")
+            AccountRow(R.drawable.ic_send, "Sign out", "Clear this session on the device", onClick = viewModel::signOut)
         }
 
         Text(
@@ -137,11 +143,11 @@ private fun ProfileCard(profile: GuardProfile?) {
 }
 
 @Composable
-private fun AccountRow(iconRes: Int, title: String, subtitle: String) {
+private fun AccountRow(iconRes: Int, title: String, subtitle: String, onClick: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { }
+            .clickable(onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

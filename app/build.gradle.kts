@@ -1,5 +1,12 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
+}
+
+// Version lives in //version.properties and is bumped by `./gradlew release`.
+val appVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use(::load)
 }
 
 android {
@@ -12,8 +19,8 @@ android {
         applicationId = "com.example.guardapp"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersion.getProperty("versionCode").toInt()
+        versionName = appVersion.getProperty("versionName")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

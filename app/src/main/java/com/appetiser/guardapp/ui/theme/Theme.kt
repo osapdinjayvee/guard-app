@@ -7,15 +7,15 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val LightColors = lightColorScheme(
-    primary = Mint,
+    primary = SeaGreen,
     onPrimary = Surface,
-    primaryContainer = MintContainer,
-    onPrimaryContainer = OnMintContainer,
-    secondary = MintDark,
+    primaryContainer = SeaGreenContainer,
+    onPrimaryContainer = OnSeaGreenContainer,
+    secondary = SeaGreenDark,
     onSecondary = Surface,
-    secondaryContainer = MintContainer,
-    onSecondaryContainer = OnMintContainer,
-    tertiary = MintDeep,
+    secondaryContainer = SeaGreenContainer,
+    onSecondaryContainer = OnSeaGreenContainer,
+    tertiary = SeaGreenDeep,
     onTertiary = Surface,
     background = Cloud,
     onBackground = Ink,
@@ -34,11 +34,11 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = MintOnDark,
+    primary = SeaGreenOnDark,
     onPrimary = InkDark,
-    primaryContainer = MintDeep,
-    onPrimaryContainer = MintContainer,
-    secondary = MintOnDark,
+    primaryContainer = SeaGreenDeep,
+    onPrimaryContainer = SeaGreenContainer,
+    secondary = SeaGreenOnDark,
     onSecondary = InkDark,
     background = InkDark,
     onBackground = Cloud,
@@ -55,7 +55,7 @@ private val DarkColors = darkColorScheme(
 
 /**
  * Dynamic colour is deliberately unsupported. Guards work outdoors in bright light and the
- * mint accent carries meaning (it marks the primary attendance action), so it must not be
+ * sea green accent carries meaning (it marks the primary attendance action), so it must not be
  * replaced by the device wallpaper's palette.
  */
 @Composable

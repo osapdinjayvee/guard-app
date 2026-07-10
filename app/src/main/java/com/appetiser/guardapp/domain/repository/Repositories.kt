@@ -1,11 +1,13 @@
 package com.appetiser.guardapp.domain.repository
 
 import com.appetiser.guardapp.core.network.ApiResult
+import com.appetiser.guardapp.domain.model.Announcement
 import com.appetiser.guardapp.domain.model.AppSettings
 import com.appetiser.guardapp.domain.model.AttendanceRecord
 import com.appetiser.guardapp.domain.model.Checkpoint
 import com.appetiser.guardapp.domain.model.CheckpointResolution
 import com.appetiser.guardapp.domain.model.Duty
+import com.appetiser.guardapp.domain.model.GuardProfile
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -43,4 +45,19 @@ interface AttendanceRepository {
     fun observeUnsyncedCount(): Flow<Int>
 
     fun observeHistory(limit: Int = 50): Flow<List<AttendanceRecord>>
+}
+
+interface ProfileRepository {
+    /** Null until a profile has been fetched. Cached so Home renders a name offline. */
+    fun observe(): Flow<GuardProfile?>
+
+    suspend fun refresh(): ApiResult<Unit>
+
+    suspend fun clear()
+}
+
+interface AnnouncementRepository {
+    fun observe(): Flow<List<Announcement>>
+
+    suspend fun refresh(): ApiResult<Unit>
 }

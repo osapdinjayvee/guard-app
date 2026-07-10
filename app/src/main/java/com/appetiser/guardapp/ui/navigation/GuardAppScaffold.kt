@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,6 +40,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.appetiser.guardapp.feature.home.HomeRoute
 import com.appetiser.guardapp.ui.theme.GuardAppTheme
 
 /** Material 3 NavigationBar's own height. */
@@ -111,9 +113,13 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             startDestination = GuardDestination.Home.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            GuardDestination.entries.forEach { destination ->
-                composable(destination.route) { PlaceholderRoute(destination) }
-            }
+            composable(GuardDestination.Home.route) { HomeRoute() }
+
+            GuardDestination.entries
+                .filterNot { it == GuardDestination.Home }
+                .forEach { destination ->
+                    composable(destination.route) { PlaceholderRoute(destination) }
+                }
         }
     }
 }
@@ -138,7 +144,8 @@ private fun androidx.compose.foundation.layout.RowScope.BarItem(
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.primary,
             selectedTextColor = MaterialTheme.colorScheme.primary,
-            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+            // No pill behind the active tab; the accent colour alone marks selection.
+            indicatorColor = Color.Transparent,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),

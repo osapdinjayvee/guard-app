@@ -32,6 +32,12 @@ data class Duty(
     val content: String,
 )
 
+data class Announcement(
+    val id: Long,
+    val title: String,
+    val content: String,
+)
+
 data class GuardProfile(
     val id: Long,
     val name: String,

@@ -48,12 +48,13 @@ Moving to 1.19.0 is a three-part change, not a version bump: AGP 9.1.0 also requ
 ## Build configuration
 
 - **AGP 9.0.1 / Gradle 9.1.0 / Java 11 target / minSdk 24 / targetSdk 36.** `app/build.gradle.kts` uses AGP 9's block DSL — `compileSdk { version = release(36) }`, not `compileSdk = 36`.
-- **Kotlin compiles with no Kotlin Gradle plugin declared.** AGP 9 has built-in Kotlin support; `compileDebugKotlin` runs even though `libs.versions.toml` declares only `com.android.application`. Adding Compose will require explicitly declaring the Kotlin and Compose compiler plugins — verify how they interact with AGP's built-in Kotlin before assuming the usual `kotlin-android` setup applies.
+- **Kotlin compiles with no Kotlin Gradle plugin declared.** AGP 9 has built-in Kotlin support (Kotlin **2.2.10**); `compileDebugKotlin` runs even though `libs.versions.toml` declares only `com.android.application`. Do **not** add `org.jetbrains.kotlin.android` — it is not needed and would double-configure Kotlin.
+- **Compose and KSP were verified by building them** (see `.docs/Implementation_Plan.md` §1). Compose needs only `org.jetbrains.kotlin.plugin.compose:2.2.10` plus `buildFeatures { compose = true }`. KSP (`2.2.10-2.0.2`) additionally requires `android.disallowKotlinSourceSets=false` in `gradle.properties`, because KSP registers generated sources through the `kotlin.sourceSets` DSL that built-in Kotlin forbids. **Room must be ≥ 2.7.1** — 2.6.1 dies under KSP2 with `IllegalStateException: unexpected jvm signature V`.
 - **All dependencies go through the version catalog** at `gradle/libs.versions.toml` and are referenced as `libs.*`. `settings.gradle.kts` sets `RepositoriesMode.FAIL_ON_PROJECT_REPOS`, so a `repositories {}` block in a module build file is a hard error — add repositories in `settings.gradle.kts` only.
 - In `pluginManagement`, `google()` is content-filtered to `com.android.*`, `com.google.*`, and `androidx.*`. Plugins outside those groups (e.g. JetBrains Kotlin, KSP) resolve from `gradlePluginPortal()`/`mavenCentral()`. The `dependencyResolutionManagement` `google()` is unfiltered.
 - **Current deps are the Views stack** (`appcompat`, `com.google.android.material`, `Theme.MaterialComponents.DayNight.DarkActionBar`), not the Compose + Material 3 stack the PRD specifies. Note that catalog's `material` alias is Material *Components for Views*, not `androidx.compose.material3`.
 - `namespace` and `applicationId` are still the placeholder `com.example.guardapp`.
-- This directory is **not a git repository**, so edits are not recoverable via git. Be careful with destructive changes.
+- Work happens on the `develop` branch; `origin` is `github.com:osapdinjayvee/guard-app`. Untracked files are not recoverable, so check `git status` before deleting.
 
 ## Agent orchestration (ruflo)
 

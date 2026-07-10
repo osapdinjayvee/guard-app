@@ -6,6 +6,14 @@
     <!-- Required to observe connectivity for the online/offline indicator. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Fine location: the PRD requires GPS accuracy in metres, which coarse cannot give. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <uses-feature android:name="android.hardware.camera.any" android:required="true" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
     <application
         android:name=".GuardApplication"
         android:allowBackup="true"

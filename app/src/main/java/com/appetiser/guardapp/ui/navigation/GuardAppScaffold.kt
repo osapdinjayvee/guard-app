@@ -1,15 +1,16 @@
 package com.appetiser.guardapp.ui.navigation
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -36,31 +37,39 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
 
     Scaffold(
         bottomBar = {
-            BottomAppBar(
-                actions = {
-                    // Two items, the FAB, then two items — Scan sits in the middle.
-                    bottomBarDestinations.take(2).forEach { destination ->
-                        BarItem(destination, currentDestination?.isOn(destination) == true) {
-                            navController.navigateToTopLevel(destination)
-                        }
+            // BottomAppBar always docks its FAB at the end, so the center action is built by
+            // hand: two tabs, the FAB, two tabs. NavigationBar's content is a RowScope, which
+            // is what lets the FAB take a weighted slot in the middle.
+            NavigationBar {
+                bottomBarDestinations.take(2).forEach { destination ->
+                    BarItem(destination, currentDestination?.isOn(destination) == true) {
+                        navController.navigateToTopLevel(destination)
                     }
-                    bottomBarDestinations.drop(2).forEach { destination ->
-                        BarItem(destination, currentDestination?.isOn(destination) == true) {
-                            navController.navigateToTopLevel(destination)
-                        }
-                    }
-                },
-                floatingActionButton = {
+                }
+
+                // No fillMaxHeight here: it would make NavigationBar expand to the full screen.
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
                     FloatingActionButton(
                         onClick = { navController.navigateToTopLevel(GuardDestination.Scan) },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.semantics {
                             contentDescription = GuardDestination.Scan.label
                         },
                     ) {
                         Icon(Icons.Default.QrCodeScanner, contentDescription = null)
                     }
-                },
-            )
+                }
+
+                bottomBarDestinations.drop(2).forEach { destination ->
+                    BarItem(destination, currentDestination?.isOn(destination) == true) {
+                        navController.navigateToTopLevel(destination)
+                    }
+                }
+            }
         },
     ) { innerPadding ->
         NavHost(

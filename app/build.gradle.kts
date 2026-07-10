@@ -29,12 +29,19 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Points at the MockWebServer stub until the backend exists (T-10).
+            // 10.0.2.2 is the host machine as seen from the Android emulator.
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/api/\"")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Placeholder. The real host is not yet known; the backend repo does not exist.
+            buildConfigField("String", "API_BASE_URL", "\"https://api.example.invalid/api/\"")
         }
     }
     compileOptions {
@@ -43,7 +50,13 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+}
+
+// Room schemas are checked in so migrations can be diffed and tested (T-11).
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -62,9 +75,25 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
 
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.moshi)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.moshi)
+    ksp(libs.moshi.kotlin.codegen)
+
+    implementation(libs.kotlinx.coroutines.android)
+
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

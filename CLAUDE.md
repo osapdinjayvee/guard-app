@@ -29,6 +29,7 @@ Then, from the project root (PowerShell):
 .\gradlew.bat connectedDebugAndroidTest     # instrumented tests (needs device/emulator)
 .\gradlew.bat lint                          # AGP lint
 .\gradlew.bat installDebug                  # install on connected device
+.\gradlew.bat release -PdryRun              # preview the next version bump
 ```
 
 Run a single unit test with `--tests`, which takes a fully-qualified class or method:
@@ -38,13 +39,11 @@ Run a single unit test with `--tests`, which takes a fully-qualified class or me
 .\gradlew.bat testDebugUnitTest --tests "com.example.guardapp.ExampleUnitTest.addition_isCorrect"
 ```
 
-### The scaffold does not build as checked in
+### `core-ktx` is deliberately pinned to 1.17.0
 
-`assembleDebug` fails at `:app:checkDebugAarMetadata`. The catalog pins `coreKtx = "1.19.0"`, but `androidx.core:core-ktx:1.19.0` requires `compileSdk 37` and AGP 9.1.0, while the project is on `compileSdk 36` / AGP 9.0.1.
+Do not bump it. `androidx.core:core-ktx:1.19.0` (the version the scaffold shipped with) fails `:app:checkDebugAarMetadata` because it requires `compileSdk 37` and AGP 9.1.0, while the project is on `compileSdk 36` / AGP 9.0.1.
 
-Fix by pinning `coreKtx = "1.17.0"` in `gradle/libs.versions.toml`. That is verified to make both `assembleDebug` and `testDebugUnitTest` pass unchanged.
-
-Do **not** reach for the AGP upgrade instead unless you intend to do all three steps: AGP 9.1.0 requires Gradle ≥ 9.3.1 (project is on 9.1.0) *and* `compileSdk 37`, and SDK platform 37 is not installed locally (only 34, 35, 36 are).
+Moving to 1.19.0 is a three-part change, not a version bump: AGP 9.1.0 also requires Gradle ≥ 9.3.1 (project is on 9.1.0), and `compileSdk 37` — SDK platform 37 is not installed locally (only 34, 35, 36 are).
 
 ## Build configuration
 
@@ -55,6 +54,24 @@ Do **not** reach for the AGP upgrade instead unless you intend to do all three s
 - **Current deps are the Views stack** (`appcompat`, `com.google.android.material`, `Theme.MaterialComponents.DayNight.DarkActionBar`), not the Compose + Material 3 stack the PRD specifies. Note that catalog's `material` alias is Material *Components for Views*, not `androidx.compose.material3`.
 - `namespace` and `applicationId` are still the placeholder `com.example.guardapp`.
 - This directory is **not a git repository**, so edits are not recoverable via git. Be careful with destructive changes.
+
+## Commits and releases
+
+Commit messages **must** follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) — `.githooks/commit-msg` rejects anything else. Allowed types: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`.
+
+```
+feat(scanner): decode checkpoint QR codes
+fix(sync): retry failed attendance uploads
+refactor!: drop support for minSdk 24
+```
+
+The hook lives in the repo and is activated per-clone with `git config core.hooksPath .githooks`. It is already set here. Merge, revert, and `fixup!`/`squash!` messages bypass validation.
+
+The app version lives in `version.properties` (root) and is read by `app/build.gradle.kts`. **Never hand-edit it** — `./gradlew release` owns that file. The task reads every commit since the last `v*` tag, infers the bump, rewrites `version.properties`, regenerates `CHANGELOG.md`, commits `chore(release): vX.Y.Z`, and tags it. Pushing stays manual.
+
+Bump rules: a `!` or a `BREAKING CHANGE:` footer → major, `feat` → minor, anything else → patch. **While the major is still `0`, a breaking change bumps the minor rather than going to `1.0.0`** — leaving 0.x is a deliberate act, not a side effect. `versionCode` increments by one per release.
+
+The task refuses to run on a dirty working tree or when the tag already exists. Preview with `-PdryRun`, which prints the bump and the changelog entry and writes nothing.
 
 ### Editing `gradle/libs.versions.toml` on Windows
 

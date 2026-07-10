@@ -24,23 +24,19 @@ The Gradle wrapper needs a JDK on `JAVA_HOME`. If you don't have one installed s
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 ```
 
+Enable the commit-message hook — this is per-clone, so everyone runs it once:
+
+```powershell
+git config core.hooksPath .githooks
+```
+
 Then build:
 
 ```powershell
 .\gradlew.bat assembleDebug
 ```
 
-### Known issue: the scaffold does not build as-is
-
-The build fails at `:app:checkDebugAarMetadata`. `gradle/libs.versions.toml` pins `coreKtx = "1.19.0"`, but `androidx.core:core-ktx:1.19.0` requires `compileSdk 37` and AGP 9.1.0, while this project targets `compileSdk 36` on AGP 9.0.1.
-
-The one-line fix is to pin an older `core-ktx` in `gradle/libs.versions.toml`:
-
-```toml
-coreKtx = "1.17.0"
-```
-
-Upgrading AGP instead is a larger change than it looks: AGP 9.1.0 also requires Gradle 9.3.1+ and SDK platform 37.
+> **Don't bump `core-ktx`.** It is pinned to 1.17.0 on purpose. Version 1.19.0 requires `compileSdk 37` and AGP 9.1.0, and AGP 9.1.0 in turn requires Gradle 9.3.1 — so it's a three-part upgrade, not a version bump.
 
 > When editing `libs.versions.toml` on Windows, don't write it with PowerShell's `Set-Content -Encoding utf8` — it emits a UTF-8 BOM, and a BOM breaks Gradle's TOML parser.
 
@@ -61,6 +57,46 @@ Run a single unit test by fully-qualified class or method:
 .\gradlew.bat testDebugUnitTest --tests "com.example.guardapp.ExampleUnitTest.addition_isCorrect"
 ```
 
+## Commit convention
+
+Commits follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/), enforced by `.githooks/commit-msg`:
+
+```
+<type>[optional scope][!]: <description>
+```
+
+Types: `build` `chore` `ci` `docs` `feat` `fix` `perf` `refactor` `revert` `style` `test`.
+
+```
+feat(scanner): decode checkpoint QR codes
+fix(sync): retry failed attendance uploads
+refactor!: drop support for minSdk 24
+```
+
+A `!` before the colon, or a `BREAKING CHANGE:` footer in the body, marks a breaking change. The commit type is what drives the version bump at release time, so it is worth getting right.
+
+## Releasing
+
+The app version lives in [`version.properties`](version.properties) and is read by `app/build.gradle.kts`. Don't edit it by hand — `./gradlew release` owns it.
+
+```powershell
+.\gradlew.bat release -PdryRun   # preview: prints the bump and changelog entry, writes nothing
+.\gradlew.bat release            # bump, changelog, commit, tag
+git push --follow-tags origin develop
+```
+
+The task reads every commit since the last `v*` tag and infers the version bump:
+
+| Commits since last tag | Bump |
+| --- | --- |
+| A `!` or a `BREAKING CHANGE:` footer | major |
+| Any `feat` | minor |
+| Anything else | patch |
+
+`versionCode` increments by one on every release. While the major version is still `0`, a breaking change bumps the *minor* instead of moving to `1.0.0` — going stable should be a deliberate decision.
+
+The task stops if the working tree is dirty or if the tag already exists, and it never pushes.
+
 ## How attendance works
 
 The app is **offline-first**: a valid attendance record is saved to the local database before any network call, so it can never be lost to a dropped connection.
@@ -79,9 +115,12 @@ Navigation is a bottom bar with Scan QR as the center action: **Home · History 
 ## Project layout
 
 ```
-.docs/                  Product requirements (source of truth)
-app/                    The Android application module
+.docs/                      Product requirements (source of truth)
+.githooks/commit-msg        Conventional Commits validation
+app/                        The Android application module
 gradle/libs.versions.toml   Version catalog — all dependencies are declared here
+version.properties          App version, managed by ./gradlew release
+CHANGELOG.md                Generated at release time
 ```
 
 Dependencies are managed exclusively through the version catalog and referenced as `libs.*`. Repositories are declared in `settings.gradle.kts`; because the build sets `FAIL_ON_PROJECT_REPOS`, adding a `repositories {}` block to a module build file is an error.

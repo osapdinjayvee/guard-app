@@ -176,8 +176,9 @@ abstract class ReleaseTask : DefaultTask() {
     fun release() {
         val isDryRun = dryRun.get()
 
+        // A dry run writes nothing, so it is safe on a dirty tree.
         val dirty = git("status", "--porcelain", "--untracked-files=no")
-        if (dirty.isNotEmpty()) {
+        if (dirty.isNotEmpty() && !isDryRun) {
             throw GradleException("Working tree has uncommitted changes:\n$dirty")
         }
 
@@ -197,8 +198,14 @@ abstract class ReleaseTask : DefaultTask() {
             )
         }
 
-        val (nextName, reason) = bump(currentName, commits)
-        val nextCode = currentCode + 1
+        // The first release publishes the version already in version.properties rather than
+        // bumping past it, so the initial tag matches the version the repo has been carrying.
+        val (nextName, reason) = if (lastTag == null) {
+            currentName to "initial release"
+        } else {
+            bump(currentName, commits)
+        }
+        val nextCode = if (lastTag == null) currentCode else currentCode + 1
         val tag = "v$nextName"
 
         if (gitOrNull("rev-parse", "--verify", "refs/tags/$tag") != null) {

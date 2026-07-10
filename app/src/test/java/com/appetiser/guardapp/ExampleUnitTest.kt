@@ -1,4 +1,4 @@
-package com.example.guardapp
+package com.appetiser.guardapp
 
 import org.junit.Test
 

@@ -55,6 +55,20 @@ Moving to 1.19.0 is a three-part change, not a version bump: AGP 9.1.0 also requ
 - `namespace` and `applicationId` are still the placeholder `com.example.guardapp`.
 - This directory is **not a git repository**, so edits are not recoverable via git. Be careful with destructive changes.
 
+## Agent orchestration (ruflo)
+
+This project is initialized with [ruflo](https://github.com/ruvnet/ruflo): `.claude/` (agents, commands, skills), `.claude-flow/` (runtime), and `.mcp.json`, which registers the `claude-flow` MCP server. Its tools (`memory_store`, `memory_search`, `swarm_init`, `agent_spawn`) load on demand via ToolSearch and require the server to be approved once per machine.
+
+Reach for a swarm when work genuinely spans subsystems. The attendance transaction is the case that warrants it: a single change can touch the scanner, camera overlay, location, Room schema, the WorkManager sync queue, and the API contract at once. Routine work — one screen, one Gradle edit, one bug — does not.
+
+When delegating, give the agent the constraint, not just the task. The three that bite hardest here:
+
+- The write path is **save locally, then sync**. An agent that reaches for the network first will produce plausible code that loses attendance records offline.
+- Selfie metadata must be **burned into the image**, not merely overlaid in the preview.
+- Thresholds (GPS accuracy, image quality) come from `GET /api/settings`, not from constants.
+
+`.docs/` is the source of truth for behavior; the backend PRD defines the API contract this app codes against. Point agents at the relevant PRD section rather than letting them infer requirements from the empty scaffold — there is almost no code here yet to infer from.
+
 ## Commits and releases
 
 Commit messages **must** follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) — `.githooks/commit-msg` rejects anything else. Allowed types: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`.

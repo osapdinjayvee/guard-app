@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +43,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appetiser.guardapp.R
 import com.appetiser.guardapp.core.camera.QrAnalyzer
+import com.appetiser.guardapp.domain.model.AttendanceType
 import com.appetiser.guardapp.ui.components.GuardCard
 import com.appetiser.guardapp.ui.components.PermissionGate
 import com.appetiser.guardapp.ui.components.ScreenTitle
@@ -81,9 +85,15 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
 
                 when (val current = state) {
                     ScanState.Scanning -> Instruction()
-                    is ScanState.Resolved -> Result(
-                        title = current.checkpoint.name,
-                        body = "${current.checkpoint.code} · ready to record attendance",
+                    is ScanState.ChoosingType -> TypeChoice(
+                        checkpointName = current.checkpoint.name,
+                        checkpointCode = current.checkpoint.code,
+                        onChoose = viewModel::onTypeChosen,
+                        onCancel = viewModel::scanAgain,
+                    )
+                    is ScanState.ReadyToCapture -> Result(
+                        title = current.type.name.replace('_', ' '),
+                        body = "${current.checkpoint.code} · selfie capture arrives in T-19",
                         colour = MaterialTheme.colorScheme.primary,
                         onDismiss = viewModel::scanAgain,
                     )
@@ -101,6 +111,74 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Time In / Time Out. Two large targets rather than a dropdown: a guard taps this with gloves
+ * on, in the dark, and a mis-tap records the wrong half of a shift.
+ */
+@Composable
+private fun TypeChoice(
+    checkpointName: String,
+    checkpointCode: String,
+    onChoose: (AttendanceType) -> Unit,
+    onCancel: () -> Unit,
+) {
+    GuardCard {
+        Text(
+            checkpointName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            checkpointCode,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TypeButton(
+                label = "Time In",
+                filled = true,
+                onClick = { onChoose(AttendanceType.TIME_IN) },
+                modifier = Modifier.weight(1f),
+            )
+            TypeButton(
+                label = "Time Out",
+                filled = false,
+                onClick = { onChoose(AttendanceType.TIME_OUT) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            Text("Scan a different checkpoint", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun TypeButton(label: String, filled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    if (filled) {
+        Button(
+            onClick = onClick,
+            shape = RoundedCornerShape(24.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+            modifier = modifier.height(54.dp),
+        ) { Text(label, fontWeight = FontWeight.Bold) }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            shape = RoundedCornerShape(24.dp),
+            modifier = modifier.height(54.dp),
+        ) {
+            Text(label, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         }
     }
 }

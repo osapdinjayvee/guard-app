@@ -1,6 +1,7 @@
 package com.appetiser.guardapp.feature.scan
 
 import com.appetiser.guardapp.core.network.ApiResult
+import com.appetiser.guardapp.domain.model.AttendanceType
 import com.appetiser.guardapp.domain.model.Checkpoint
 import com.appetiser.guardapp.domain.model.CheckpointResolution
 import com.appetiser.guardapp.domain.repository.CheckpointRepository
@@ -45,12 +46,12 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun `an active checkpoint resolves`() = runTest {
+    fun `an active checkpoint moves straight to type selection`() = runTest {
         val vm = ScanViewModel(FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))))
 
         vm.onCodeScanned("GATE-A")
 
-        assertEquals(ScanState.Resolved(gateA), vm.state.value)
+        assertEquals(ScanState.ChoosingType(gateA), vm.state.value)
     }
 
     /** A retired checkpoint must not read as "unrecognised code". */
@@ -86,7 +87,7 @@ class ScanViewModelTest {
         vm.onCodeScanned("GATE-B")
 
         assertEquals(1, repo.resolveCalls)
-        assertEquals(ScanState.Resolved(gateA), vm.state.value)
+        assertEquals(ScanState.ChoosingType(gateA), vm.state.value)
     }
 
     @Test
@@ -100,5 +101,35 @@ class ScanViewModelTest {
         assertEquals(ScanState.Scanning, vm.state.value)
         vm.onCodeScanned("GATE-A")
         assertEquals(2, repo.resolveCalls)
+    }
+
+    @Test
+    fun `choosing a type carries the checkpoint forward`() = runTest {
+        val vm = ScanViewModel(FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))))
+        vm.onCodeScanned("GATE-A")
+
+        vm.onTypeChosen(AttendanceType.TIME_OUT)
+
+        assertEquals(ScanState.ReadyToCapture(gateA, AttendanceType.TIME_OUT), vm.state.value)
+    }
+
+    /** A type without a resolved checkpoint is meaningless and must not be reachable. */
+    @Test
+    fun `choosing a type while still scanning is ignored`() = runTest {
+        val vm = ScanViewModel(FakeCheckpoints())
+
+        vm.onTypeChosen(AttendanceType.TIME_IN)
+
+        assertEquals(ScanState.Scanning, vm.state.value)
+    }
+
+    @Test
+    fun `choosing a type on a disabled checkpoint is ignored`() = runTest {
+        val vm = ScanViewModel(FakeCheckpoints(mapOf("ROOF-OLD" to CheckpointResolution.Disabled(roofOld))))
+        vm.onCodeScanned("ROOF-OLD")
+
+        vm.onTypeChosen(AttendanceType.TIME_IN)
+
+        assertTrue("must not fall through to capture", vm.state.value is ScanState.Disabled)
     }
 }

@@ -2,6 +2,7 @@ package com.appetiser.guardapp.feature.scan
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appetiser.guardapp.domain.model.AttendanceType
 import com.appetiser.guardapp.domain.model.Checkpoint
 import com.appetiser.guardapp.domain.model.CheckpointResolution
 import com.appetiser.guardapp.domain.repository.CheckpointRepository
@@ -14,7 +15,12 @@ import javax.inject.Inject
 
 sealed interface ScanState {
     data object Scanning : ScanState
-    data class Resolved(val checkpoint: Checkpoint) : ScanState
+
+    /** Resolved and active: the guard now picks Time In or Time Out. */
+    data class ChoosingType(val checkpoint: Checkpoint) : ScanState
+
+    /** Checkpoint and type settled; the selfie step follows in T-19. */
+    data class ReadyToCapture(val checkpoint: Checkpoint, val type: AttendanceType) : ScanState
 
     /** A retired checkpoint. Named apart from [Unknown] so the guard knows to try another door. */
     data class Disabled(val checkpoint: Checkpoint) : ScanState
@@ -38,11 +44,17 @@ class ScanViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state.value = when (val resolution = checkpoints.resolve(code)) {
-                is CheckpointResolution.Resolved -> ScanState.Resolved(resolution.checkpoint)
+                is CheckpointResolution.Resolved -> ScanState.ChoosingType(resolution.checkpoint)
                 is CheckpointResolution.Disabled -> ScanState.Disabled(resolution.checkpoint)
                 is CheckpointResolution.Unknown -> ScanState.Unknown(resolution.code)
             }
         }
+    }
+
+    /** Only reachable from [ScanState.ChoosingType]: a type without a checkpoint is meaningless. */
+    fun onTypeChosen(type: AttendanceType) {
+        val current = _state.value as? ScanState.ChoosingType ?: return
+        _state.value = ScanState.ReadyToCapture(current.checkpoint, type)
     }
 
     fun scanAgain() {

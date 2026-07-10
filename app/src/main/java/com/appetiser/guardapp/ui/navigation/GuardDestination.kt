@@ -4,27 +4,27 @@ import androidx.annotation.DrawableRes
 import com.appetiser.guardapp.R
 
 /**
- * Top-level destinations. Scan is deliberately absent from [bottomBarDestinations]: it is the
- * center action, rendered as a circular FAB rather than a bar item, per PRD §5.
+ * Bottom-bar destinations, styled after the MinSUverse portal.
  *
- * Icons are Heroicons v2 outline (MIT), vendored as vector drawables in res/drawable.
+ * [ScanQr] is the raised centre action and is not a bar item — it is the primary attendance
+ * action, and every other screen exists to serve it.
  */
 enum class GuardDestination(
     val route: String,
     val label: String,
     @param:DrawableRes val icon: Int,
 ) {
-    Home("home", "Home", R.drawable.ic_home),
-    History("history", "History", R.drawable.ic_history),
-    Scan("scan", "Scan QR", R.drawable.ic_scan),
-    Reports("reports", "Reports", R.drawable.ic_reports),
-    Settings("settings", "Settings", R.drawable.ic_settings),
+    Home("home", "Home", R.drawable.ic_nav_home),
+    History("history", "History", R.drawable.ic_nav_history),
+    ScanQr("scan", "Scan QR", R.drawable.ic_qrcode_fab),
+    Reports("reports", "Reports", R.drawable.ic_grades),
+    Account("account", "Account", R.drawable.ic_nav_account),
 }
 
-/** The four bar items, split either side of the center Scan action. */
+/** The four bar items, split either side of the centre action. */
 val bottomBarDestinations: List<GuardDestination> = listOf(
     GuardDestination.Home,
     GuardDestination.History,
     GuardDestination.Reports,
-    GuardDestination.Settings,
+    GuardDestination.Account,
 )

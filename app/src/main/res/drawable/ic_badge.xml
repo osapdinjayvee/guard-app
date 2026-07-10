@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Converted from the MinSUverse portal's badge.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M5.5,5.0 h13.0 a2.5,2.5 0 0 1 2.5,2.5 v9.0 a2.5,2.5 0 0 1 -2.5,2.5 h-13.0 a2.5,2.5 0 0 1 -2.5,-2.5 v-9.0 a2.5,2.5 0 0 1 2.5,-2.5 z"
+        android:strokeColor="#FF005825"
+        android:strokeWidth="1.8" />
+    <path
+        android:pathData="M6.5,11.0 a2.5,2.5 0 1 0 5.0,0 a2.5,2.5 0 1 0 -5.0,0 z"
+        android:strokeColor="#FF005825"
+        android:strokeWidth="1.6" />
+    <path
+        android:pathData="M5.5 16.2 C6 14.6 7.5 14 9 14 S12 14.6 12.5 16.2"
+        android:strokeColor="#FF005825"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M14.0,10.0 L19.0,10.0"
+        android:strokeColor="#FF005825"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M14.0,13.0 L19.0,13.0"
+        android:strokeColor="#FF005825"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M14.0,16.0 L17.0,16.0"
+        android:strokeColor="#FFFFB21A"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round" />
+</vector>

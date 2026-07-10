@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark-scheme variant. Converted from the MinSUverse portal's report.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12 4 L21 20 H3 z"
+        android:strokeColor="#FF4DD182"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12.0,10.0 L12.0,15.0"
+        android:strokeColor="#FF4DD182"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M10.8,17.6 a1.2,1.2 0 1 0 2.4,0 a1.2,1.2 0 1 0 -2.4,0 z"
+        android:fillColor="#FFFFB21A" />
+</vector>

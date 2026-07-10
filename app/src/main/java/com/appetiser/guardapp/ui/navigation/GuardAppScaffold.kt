@@ -1,18 +1,15 @@
 package com.appetiser.guardapp.ui.navigation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -21,7 +18,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,7 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -40,16 +36,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.appetiser.guardapp.feature.account.AccountScreen
+import com.appetiser.guardapp.feature.history.HistoryScreen
 import com.appetiser.guardapp.feature.home.HomeRoute
-import com.appetiser.guardapp.ui.theme.GuardAppTheme
+import com.appetiser.guardapp.feature.reports.ReportsScreen
+import com.appetiser.guardapp.feature.scan.ScanQrScreen
 
-/** Material 3 NavigationBar's own height. */
-private val BarHeight = 80.dp
+private val BarHeight = 76.dp
 
-/** How far the Scan FAB rises above the top edge of the bar. */
-private val FabLift = 28.dp
-
-private val FabSize = 72.dp
+/** How far the centre action rises above the bar's top edge. */
+private val FabLift = 26.dp
+private val FabSize = 62.dp
 
 @Composable
 fun GuardAppScaffold(navController: NavHostController = rememberNavController()) {
@@ -57,13 +54,11 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
     val currentDestination = backStackEntry?.destination
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            // BottomAppBar always docks its FAB at the end, so the center action is built by
-            // hand: two tabs, the FAB, two tabs. NavigationBar's content is a RowScope, which
-            // is what lets the FAB take a weighted slot in the middle.
-            // The Scan FAB is raised above the bar. It is NOT drawn with a negative offset:
-            // a child rendered outside its parent's bounds still paints but stops receiving
-            // touches, so the slot is sized to contain the raised button instead.
+            // The centre action is raised above the bar. It is not drawn with a negative
+            // offset: a child painted outside its parent's bounds still renders but stops
+            // receiving touches, so the slot is sized to contain it.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -79,7 +74,6 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             navController.navigateToTopLevel(destination)
                         }
                     }
-                    // Reserve the middle slot for the FAB.
                     Spacer(Modifier.weight(1f))
                     bottomBarDestinations.drop(2).forEach { destination ->
                         BarItem(destination, currentDestination?.isOn(destination) == true) {
@@ -88,23 +82,11 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                     }
                 }
 
-                FloatingActionButton(
-                    onClick = { navController.navigateToTopLevel(GuardDestination.Scan) },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .size(FabSize)
-                        .semantics { contentDescription = GuardDestination.Scan.label },
-                ) {
-                    Icon(
-                        painter = painterResource(GuardDestination.Scan.icon),
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                    )
-                }
+                CentreAction(
+                    selected = currentDestination?.isOn(GuardDestination.ScanQr) == true,
+                    onClick = { navController.navigateToTopLevel(GuardDestination.ScanQr) },
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
             }
         },
     ) { innerPadding ->
@@ -114,18 +96,50 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(GuardDestination.Home.route) { HomeRoute() }
-
-            GuardDestination.entries
-                .filterNot { it == GuardDestination.Home }
-                .forEach { destination ->
-                    composable(destination.route) { PlaceholderRoute(destination) }
-                }
+            composable(GuardDestination.History.route) { HistoryScreen() }
+            composable(GuardDestination.ScanQr.route) { ScanQrScreen() }
+            composable(GuardDestination.Reports.route) { ReportsScreen() }
+            composable(GuardDestination.Account.route) { AccountScreen() }
         }
     }
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.BarItem(
+private fun CentreAction(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            shape = CircleShape,
+            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+            modifier = Modifier
+                .size(FabSize)
+                .semantics { contentDescription = GuardDestination.ScanQr.label },
+        ) {
+            // Two-tone drawable: its own white and amber, so it must not be tinted.
+            Icon(
+                painter = painterResource(GuardDestination.ScanQr.icon),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(26.dp),
+            )
+        }
+        Text(
+            GuardDestination.ScanQr.label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+    }
+}
+
+@Composable
+private fun RowScope.BarItem(
     destination: GuardDestination,
     selected: Boolean,
     onClick: () -> Unit,
@@ -140,11 +154,17 @@ private fun androidx.compose.foundation.layout.RowScope.BarItem(
                 modifier = Modifier.size(24.dp),
             )
         },
-        label = { Text(destination.label, style = MaterialTheme.typography.labelMedium) },
+        label = {
+            Text(
+                destination.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            )
+        },
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.primary,
             selectedTextColor = MaterialTheme.colorScheme.primary,
-            // No pill behind the active tab; the accent colour alone marks selection.
+            // No pill behind the active tab; colour and weight alone mark selection.
             indicatorColor = Color.Transparent,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -156,71 +176,11 @@ private fun androidx.compose.foundation.layout.RowScope.BarItem(
 private fun androidx.navigation.NavDestination.isOn(destination: GuardDestination): Boolean =
     hierarchy.any { it.route == destination.route }
 
-/**
- * Single-top navigation that pops back to the start destination, so the back stack cannot grow
- * unbounded as a guard taps between tabs.
- */
+/** Single-top navigation so the back stack cannot grow as a guard taps between tabs. */
 private fun NavHostController.navigateToTopLevel(destination: GuardDestination) {
     navigate(destination.route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
     }
-}
-
-/**
- * Placeholder content, shaped as the white card on a cool ground that the rest of the app
- * will use. Real screens replace these in Phase 5.
- */
-@Composable
-private fun PlaceholderRoute(destination: GuardDestination) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(20.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Card(
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Icon(
-                        painter = painterResource(destination.icon),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(14.dp).size(28.dp),
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    destination.label,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Not yet implemented",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun GuardAppScaffoldPreview() {
-    GuardAppTheme { GuardAppScaffold() }
 }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Converted from the MinSUverse portal's nav-scan.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3 9 V5 a2 2 0 0 1 2-2 H9 V5.4 H5.4 V9 z"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M15 3 H19 a2 2 0 0 1 2 2 V9 H18.6 V5.4 H15 z"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M3 15 H5.4 V18.6 H9 V21 H5 a2 2 0 0 1-2-2 z"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M21 15 V19 a2 2 0 0 1-2 2 H15 V18.6 H18.6 V15 z"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M7.0,11.0 h10.0 a1.0,1.0 0 0 1 1.0,1.0 v0.0 a1.0,1.0 0 0 1 -1.0,1.0 h-10.0 a1.0,1.0 0 0 1 -1.0,-1.0 v-0.0 a1.0,1.0 0 0 1 1.0,-1.0 z"
+        android:fillColor="#FF000000" />
+</vector>

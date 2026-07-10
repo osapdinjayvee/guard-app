@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Converted from the MinSUverse portal's nav-history.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M5 4 a1.4 1.4 0 0 1 1.4-1.4 H14 L19.4 8 V19.6 a1.4 1.4 0 0 1-1.4 1.4 H6.4 A1.4 1.4 0 0 1 5 19.6 z M14 3.2 V8.4 H19.2 z M7.5 11 h9 v1.6 h-9 z M7.5 14 h9 v1.6 h-9 z M7.5 17 h6 v1.6 h-6 z"
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd" />
+</vector>

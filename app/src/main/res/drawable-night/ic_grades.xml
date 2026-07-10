@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark-scheme variant. Converted from the MinSUverse portal's grades.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3.0,20.5 L21.0,20.5"
+        android:strokeColor="#FF4DD182"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M6.2,13.5 h1.2000000000000002 a1.0,1.0 0 0 1 1.0,1.0 v4.5 a1.0,1.0 0 0 1 -1.0,1.0 h-1.2000000000000002 a1.0,1.0 0 0 1 -1.0,-1.0 v-4.5 a1.0,1.0 0 0 1 1.0,-1.0 z"
+        android:strokeColor="#FF4DD182"
+        android:strokeWidth="1.8" />
+    <path
+        android:pathData="M11.4,8.5 h1.2000000000000002 a1.0,1.0 0 0 1 1.0,1.0 v9.5 a1.0,1.0 0 0 1 -1.0,1.0 h-1.2000000000000002 a1.0,1.0 0 0 1 -1.0,-1.0 v-9.5 a1.0,1.0 0 0 1 1.0,-1.0 z"
+        android:strokeColor="#FF4DD182"
+        android:strokeWidth="1.8" />
+    <path
+        android:pathData="M16.6,4.5 h1.2000000000000002 a1.0,1.0 0 0 1 1.0,1.0 v13.5 a1.0,1.0 0 0 1 -1.0,1.0 h-1.2000000000000002 a1.0,1.0 0 0 1 -1.0,-1.0 v-13.5 a1.0,1.0 0 0 1 1.0,-1.0 z"
+        android:strokeColor="#FF4DD182"
+        android:strokeWidth="1.8" />
+    <path
+        android:pathData="M11.4,9.2 h1.2 a0.4,0.4 0 0 1 0.4,0.4 v1.5999999999999999 a0.4,0.4 0 0 1 -0.4,0.4 h-1.2 a0.4,0.4 0 0 1 -0.4,-0.4 v-1.5999999999999999 a0.4,0.4 0 0 1 0.4,-0.4 z"
+        android:fillColor="#FFFFB21A" />
+</vector>

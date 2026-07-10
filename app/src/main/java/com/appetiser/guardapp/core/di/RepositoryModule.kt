@@ -1,0 +1,42 @@
+package com.appetiser.guardapp.core.di
+
+import com.appetiser.guardapp.data.DataStoreSettingsCache
+import com.appetiser.guardapp.data.DefaultAttendanceRepository
+import com.appetiser.guardapp.data.DefaultCheckpointRepository
+import com.appetiser.guardapp.data.DefaultDutyRepository
+import com.appetiser.guardapp.data.DefaultSettingsRepository
+import com.appetiser.guardapp.data.SettingsCache
+import com.appetiser.guardapp.domain.repository.AttendanceRepository
+import com.appetiser.guardapp.domain.repository.CheckpointRepository
+import com.appetiser.guardapp.domain.repository.DutyRepository
+import com.appetiser.guardapp.domain.repository.SettingsRepository
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindCheckpointRepository(impl: DefaultCheckpointRepository): CheckpointRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDutyRepository(impl: DefaultDutyRepository): DutyRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsRepository(impl: DefaultSettingsRepository): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAttendanceRepository(impl: DefaultAttendanceRepository): AttendanceRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsCache(impl: DataStoreSettingsCache): SettingsCache
+}

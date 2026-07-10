@@ -11,7 +11,7 @@ import javax.inject.Singleton
  * the timestamp authority (device vs server) is still an open decision — see
  * `.docs/Implementation_Plan.md` §5.
  */
-interface Clock {
+fun interface Clock {
     fun nowMillis(): Long
 }
 

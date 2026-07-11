@@ -2,6 +2,8 @@ package com.appetiser.guardapp.core.di
 
 import com.appetiser.guardapp.core.connectivity.ConnectivityNetworkMonitor
 import com.appetiser.guardapp.core.connectivity.NetworkMonitor
+import com.appetiser.guardapp.core.location.FusedLocationProvider
+import com.appetiser.guardapp.core.location.LocationProvider
 import com.appetiser.guardapp.data.DataStoreSettingsCache
 import com.appetiser.guardapp.data.DefaultAuthRepository
 import com.appetiser.guardapp.data.DefaultAnnouncementRepository
@@ -63,4 +65,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAuthRepository(impl: DefaultAuthRepository): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLocationProvider(impl: FusedLocationProvider): LocationProvider
 }

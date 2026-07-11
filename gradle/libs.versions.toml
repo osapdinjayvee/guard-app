@@ -25,6 +25,7 @@ camerax = "1.4.1"
 # Bundled model, not play-services-mlkit-*: the unbundled variant downloads on first use, and
 # a guard's first scan may well be at a basement checkpoint with no signal.
 mlkitBarcode = "17.3.0"
+playLocation = "21.3.0"
 # Do not bump: 1.19.0 requires compileSdk 37 + AGP 9.1.0 + Gradle 9.3.1.
 coreKtx = "1.17.0"
 junit = "4.13.2"
@@ -75,6 +76,7 @@ androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", 
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playLocation" }
 
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }

@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appetiser.guardapp.R
 import com.appetiser.guardapp.core.camera.QrAnalyzer
 import com.appetiser.guardapp.domain.model.AttendanceType
+import com.appetiser.guardapp.feature.selfie.SelfieScreen
 import com.appetiser.guardapp.ui.components.GuardCard
 import com.appetiser.guardapp.ui.components.PermissionGate
 import com.appetiser.guardapp.ui.components.ScreenTitle
@@ -54,6 +55,17 @@ import java.util.concurrent.Executors
 @Composable
 fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Capture takes over the whole screen: the scanner's camera must be released first, and
+    // two bound camera use-cases would fight over the device.
+    (state as? ScanState.ReadyToCapture)?.let { ready ->
+        SelfieScreen(
+            checkpoint = ready.checkpoint,
+            type = ready.type,
+            onCancel = viewModel::scanAgain,
+        )
+        return
+    }
 
     Column(
         Modifier
@@ -91,12 +103,7 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                         onChoose = viewModel::onTypeChosen,
                         onCancel = viewModel::scanAgain,
                     )
-                    is ScanState.ReadyToCapture -> Result(
-                        title = current.type.name.replace('_', ' '),
-                        body = "${current.checkpoint.code} · selfie capture arrives in T-19",
-                        colour = MaterialTheme.colorScheme.primary,
-                        onDismiss = viewModel::scanAgain,
-                    )
+                    is ScanState.ReadyToCapture -> Unit // handled above, before the camera binds
                     is ScanState.Disabled -> Result(
                         title = "Checkpoint retired",
                         body = "${current.checkpoint.code} is no longer in use. Try another checkpoint.",

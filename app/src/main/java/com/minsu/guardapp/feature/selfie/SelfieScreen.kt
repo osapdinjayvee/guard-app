@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -27,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -89,13 +91,23 @@ fun SelfieScreen(
             val captured = state.capturedFile
             when {
                 state.submitted -> SubmittedConfirmation(onDone = onCancel)
-                captured != null -> CapturedPreview(
-                    path = captured.absolutePath,
+
+                // The acknowledgement is a screen of its own, reached only once the photo is
+                // accepted. Three decisions on one scroll — is the photo good, have I read the
+                // duties, do I submit — is how a guard ticks a box they never read.
+                captured != null && state.onDutiesStep -> DutiesAcknowledgement(
                     state = state,
-                    onRetake = viewModel::retake,
                     onAcknowledge = viewModel::setDutiesAcknowledged,
+                    onBack = viewModel::backToPhoto,
                     onSubmit = viewModel::submit,
                 )
+
+                captured != null -> CapturedPreview(
+                    path = captured.absolutePath,
+                    onRetake = viewModel::retake,
+                    onContinue = viewModel::proceedToDuties,
+                )
+
                 else -> LiveCapture(state, viewModel, onCancel)
             }
         }
@@ -151,7 +163,7 @@ private fun LiveCapture(state: SelfieUiState, viewModel: SelfieViewModel, onCanc
 
         Spacer(Modifier.height(16.dp))
 
-        state.gpsBlock?.let { GpsNotice(it, state.settings.gpsAccuracyThresholdMetres) }
+        state.gpsBlock?.let { GpsNotice(it, state) }
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
@@ -205,7 +217,7 @@ private fun MetadataOverlay(lines: List<String>, modifier: Modifier = Modifier) 
 }
 
 @Composable
-private fun GpsNotice(block: GpsBlock, thresholdMetres: Float) {
+private fun GpsNotice(block: GpsBlock, state: SelfieUiState) {
     val (title, body, colour) = when (block) {
         GpsBlock.WAITING -> Triple("Getting your location…", "Hold still for a moment.", SyncPending)
         GpsBlock.NO_FIX -> Triple(
@@ -215,8 +227,19 @@ private fun GpsNotice(block: GpsBlock, thresholdMetres: Float) {
         )
         GpsBlock.TOO_INACCURATE -> Triple(
             "Location is not precise enough",
-            "Waiting for a fix within ±${thresholdMetres.toInt()} m.",
+            "Waiting for a fix within ±${state.settings.gpsAccuracyThresholdMetres.toInt()} m. " +
+                "Currently ±${state.fix?.accuracyMetres?.toInt() ?: "—"} m.",
             SyncPending,
+        )
+        // Said here, before the shutter, rather than by the server hours later. The distance is
+        // spelled out because "too far" is not actionable and "8.8 km away" is: it tells the guard
+        // immediately whether they are at the wrong post or the post has the wrong coordinates.
+        GpsBlock.OUT_OF_RANGE -> Triple(
+            "Too far from ${state.checkpoint?.code ?: "this checkpoint"}",
+            "You are ${formatDistance(state.distanceToCheckpointMetres)} away, and the limit is " +
+                "${state.settings.geofenceRadiusMetres.toInt()} m. Move closer to the checkpoint, " +
+                "or scan the one you are actually at.",
+            SyncFailed,
         )
     }
     GuardCard {
@@ -225,14 +248,15 @@ private fun GpsNotice(block: GpsBlock, thresholdMetres: Float) {
     }
 }
 
+private fun formatDistance(metres: Float?): String = when {
+    metres == null -> "an unknown distance"
+    metres >= 1_000f -> "%.1f km".format(metres / 1_000f)
+    else -> "${metres.toInt()} m"
+}
+
+/** Step 1 after the shutter: is this photo good enough? Nothing else competes with that. */
 @Composable
-private fun CapturedPreview(
-    path: String,
-    state: SelfieUiState,
-    onRetake: () -> Unit,
-    onAcknowledge: (Boolean) -> Unit,
-    onSubmit: () -> Unit,
-) {
+private fun CapturedPreview(path: String, onRetake: () -> Unit, onContinue: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -260,26 +284,103 @@ private fun CapturedPreview(
             textAlign = TextAlign.Center,
         )
 
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = onRetake,
+                modifier = Modifier.weight(1f).height(54.dp),
+            ) {
+                Text("Retake", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+            Button(
+                onClick = onContinue,
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+                modifier = Modifier.weight(1f).height(54.dp),
+            ) {
+                Text("Continue", fontWeight = FontWeight.Bold)
+            }
+        }
         Spacer(Modifier.height(16.dp))
-        DutiesGate(
-            duty = state.duty,
-            acknowledged = state.dutiesAcknowledged,
-            onAcknowledge = onAcknowledge,
+    }
+}
+
+/**
+ * Step 2: the Duties & Responsibilities acknowledgement (PRD §6), on a screen of its own.
+ *
+ * The full text, not a summary — a guard cannot acknowledge what they have not been shown. Submit
+ * stays disabled until the box is ticked, and the id of this revision is stored on the record, so
+ * what was agreed to can always be recovered even after the document is rewritten.
+ */
+@Composable
+private fun DutiesAcknowledgement(
+    state: SelfieUiState,
+    onAcknowledge: (Boolean) -> Unit,
+    onBack: () -> Unit,
+    onSubmit: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 4.dp),
+    ) {
+        Text(
+            state.duty?.title ?: "Duties & Responsibilities",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
         )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Read this before recording your attendance.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(16.dp))
+        GuardCard {
+            Text(
+                state.duty?.content
+                    ?: "Duties have not been downloaded to this phone yet. Open Home while online.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        GuardCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = state.dutiesAcknowledged,
+                    onCheckedChange = onAcknowledge,
+                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "I have read and understood my duties and responsibilities.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
 
         state.error?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
-                onClick = onRetake,
+                onClick = onBack,
                 enabled = !state.isSubmitting,
                 modifier = Modifier.weight(1f).height(54.dp),
             ) {
-                Text("Retake", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text("Back", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
             Button(
                 onClick = onSubmit,
@@ -302,7 +403,7 @@ private fun CapturedPreview(
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
     }
 }
 

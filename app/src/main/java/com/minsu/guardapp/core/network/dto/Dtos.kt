@@ -39,6 +39,8 @@ data class AnnouncementDto(
 data class MobileSettingsDto(
     // Every field is optional; the client falls back to these defaults. Adding a key
     // server-side is therefore not a breaking change.
+    /** The server's geofence. Enforced on the client too, so a wasted capture is never taken. */
+    @Json(name = "geofence_radius_m") val geofenceRadiusM: Float = 100f,
     @Json(name = "gps_accuracy_threshold_m") val gpsAccuracyThresholdM: Float = 50f,
     @Json(name = "gps_failure_policy") val gpsFailurePolicy: String = "block",
     @Json(name = "gps_timeout_seconds") val gpsTimeoutSeconds: Int = 15,

@@ -52,14 +52,24 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Where Home's tiles lead. The scaffold owns the navigator; Home only says where it wants to go. */
+enum class HomeAction { Scan, History, Reports, Checkpoints, Duties, Announcements, Account }
+
 @Composable
-fun HomeRoute(viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeRoute(
+    onAction: (HomeAction) -> Unit = {},
+    viewModel: HomeViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    HomeScreen(state)
+    HomeScreen(state, onAction = onAction)
 }
 
 @Composable
-fun HomeScreen(state: HomeUiState, modifier: Modifier = Modifier) {
+fun HomeScreen(
+    state: HomeUiState,
+    onAction: (HomeAction) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -72,9 +82,10 @@ fun HomeScreen(state: HomeUiState, modifier: Modifier = Modifier) {
         Header(state.profile)
         IdentityRow(state.profile, state.isOnline)
 
-        SearchField("Search attendance, checkpoints…")
+        // The search field that used to sit here searched nothing. Removed rather than left as a
+        // control that swallows taps: searching attendance is not a feature this app has.
 
-        QuickActions()
+        QuickActions(onAction)
 
         state.maintenanceMessage?.let { MaintenanceBanner(it) }
 
@@ -190,19 +201,23 @@ private fun ConnectivityPill(isOnline: Boolean) {
     }
 }
 
-private data class Action(val icon: Int, val label: String)
+private data class Action(val icon: Int, val label: String, val destination: HomeAction)
 
 @Composable
-private fun QuickActions() {
+private fun QuickActions(onAction: (HomeAction) -> Unit) {
+    // Every tile goes somewhere. A tile that does nothing when tapped is worse than an absent one:
+    // it teaches the guard that the app is broken, and they stop trusting the tiles that do work.
+    //
+    // "Schedule" used to sit here and led nowhere. Shift scheduling is not in this product, so the
+    // tile is gone rather than being left as furniture.
     val actions = listOf(
-        Action(R.drawable.ic_finger_print, "Attendance"),
-        Action(R.drawable.ic_dtr, "DTR"),
-        Action(R.drawable.ic_grades, "Reports"),
-        Action(R.drawable.ic_calendar, "Schedule"),
-        Action(R.drawable.ic_locator, "Checkpoints"),
-        Action(R.drawable.ic_document, "Duties"),
-        Action(R.drawable.ic_megaphone, "Announcement"),
-        Action(R.drawable.ic_profile, "Profile"),
+        Action(R.drawable.ic_finger_print, "Attendance", HomeAction.Scan),
+        Action(R.drawable.ic_dtr, "DTR", HomeAction.History),
+        Action(R.drawable.ic_grades, "Reports", HomeAction.Reports),
+        Action(R.drawable.ic_locator, "Checkpoints", HomeAction.Checkpoints),
+        Action(R.drawable.ic_document, "Duties", HomeAction.Duties),
+        Action(R.drawable.ic_megaphone, "Announcement", HomeAction.Announcements),
+        Action(R.drawable.ic_profile, "Profile", HomeAction.Account),
     )
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -215,10 +230,13 @@ private fun QuickActions() {
                     QuickAction(
                         iconRes = action.icon,
                         label = action.label,
-                        onClick = {},
+                        onClick = { onAction(action.destination) },
                         modifier = Modifier.weight(1f),
                     )
                 }
+                // Keeps a short final row aligned to the same four-column grid instead of
+                // stretching its tiles across the full width.
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

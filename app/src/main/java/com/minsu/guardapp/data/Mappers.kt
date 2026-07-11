@@ -54,6 +54,7 @@ fun DutyDto.toEntity(now: Long) = DutyEntity(
 fun DutyEntity.toDomain() = Duty(id = id, title = title, content = content)
 
 fun MobileSettingsDto.toDomain() = AppSettings(
+    geofenceRadiusMetres = geofenceRadiusM,
     gpsAccuracyThresholdMetres = gpsAccuracyThresholdM,
     // An unrecognised policy string falls back to BLOCK rather than silently allowing
     // location-less attendance.

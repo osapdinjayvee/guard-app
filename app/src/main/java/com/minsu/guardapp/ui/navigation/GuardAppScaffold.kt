@@ -38,7 +38,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.minsu.guardapp.feature.account.AccountScreen
 import com.minsu.guardapp.feature.history.HistoryScreen
+import com.minsu.guardapp.feature.home.HomeAction
 import com.minsu.guardapp.feature.home.HomeRoute
+import com.minsu.guardapp.feature.reference.AnnouncementsScreen
+import com.minsu.guardapp.feature.reference.CheckpointsScreen
+import com.minsu.guardapp.feature.reference.DutiesScreen
 import com.minsu.guardapp.feature.reports.ReportsScreen
 import com.minsu.guardapp.feature.scan.ScanQrScreen
 
@@ -95,11 +99,34 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             startDestination = GuardDestination.Home.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(GuardDestination.Home.route) { HomeRoute() }
+            composable(GuardDestination.Home.route) {
+                HomeRoute(
+                    onAction = { action ->
+                        when (action) {
+                            // The four that are bottom-bar destinations navigate as such — the bar
+                            // selection follows, and back returns to Home rather than stacking.
+                            HomeAction.Scan -> navController.navigateToTopLevel(GuardDestination.ScanQr)
+                            HomeAction.History -> navController.navigateToTopLevel(GuardDestination.History)
+                            HomeAction.Reports -> navController.navigateToTopLevel(GuardDestination.Reports)
+                            HomeAction.Account -> navController.navigateToTopLevel(GuardDestination.Account)
+
+                            HomeAction.Checkpoints -> navController.navigate(ROUTE_CHECKPOINTS)
+                            HomeAction.Duties -> navController.navigate(ROUTE_DUTIES)
+                            HomeAction.Announcements -> navController.navigate(ROUTE_ANNOUNCEMENTS)
+                        }
+                    },
+                )
+            }
             composable(GuardDestination.History.route) { HistoryScreen() }
             composable(GuardDestination.ScanQr.route) { ScanQrScreen() }
             composable(GuardDestination.Reports.route) { ReportsScreen() }
             composable(GuardDestination.Account.route) { AccountScreen() }
+
+            // Reference screens, reached from Home's tiles. Not bottom-bar destinations: they are
+            // things a guard looks up, not places they work from.
+            composable(ROUTE_CHECKPOINTS) { CheckpointsScreen() }
+            composable(ROUTE_DUTIES) { DutiesScreen() }
+            composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen() }
         }
     }
 }
@@ -183,3 +210,8 @@ private fun NavHostController.navigateToTopLevel(destination: GuardDestination) 
         restoreState = true
     }
 }
+
+/** Reference destinations behind Home's tiles. Not part of the bottom bar. */
+private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
+private const val ROUTE_DUTIES = "reference/duties"
+private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"

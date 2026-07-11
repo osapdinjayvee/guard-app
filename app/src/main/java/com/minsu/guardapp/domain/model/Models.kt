@@ -80,6 +80,7 @@ enum class GpsFailurePolicy {
  * Defaults apply only until `GET /api/settings` has succeeded once.
  */
 data class AppSettings(
+    val geofenceRadiusMetres: Float = 100f,
     val gpsAccuracyThresholdMetres: Float = 50f,
     val gpsFailurePolicy: GpsFailurePolicy = GpsFailurePolicy.BLOCK,
     val gpsTimeoutSeconds: Int = 15,

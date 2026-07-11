@@ -21,11 +21,16 @@ class SelfieUiStateTest {
     private fun state(
         fix: LocationFix? = null,
         settings: AppSettings = AppSettings(),
+        // Default: the acquisition window has closed. A test about "no fix" means "we looked and
+        // found nothing", not "we have not looked yet" — those are different states now.
+        isAcquiringGps: Boolean = false,
+        checkpoint: Checkpoint = gateA,
     ) = SelfieUiState(
         guardName = "Juan Dela Cruz",
-        checkpoint = gateA,
+        checkpoint = checkpoint,
         type = AttendanceType.TIME_IN,
         fix = fix,
+        isAcquiringGps = isAcquiringGps,
         settings = settings,
         nowMillis = CAPTURED_AT,
     )
@@ -40,6 +45,75 @@ class SelfieUiStateTest {
 
         assertEquals(GpsBlock.NO_FIX, current.gpsBlock)
         assertFalse(current.canCapture)
+    }
+
+    /**
+     * "Still looking" is not "there is nothing there".
+     *
+     * A cold GPS receiver takes seconds. Announcing "location unavailable" the instant the camera
+     * opens is false, and it is how a guard learns to disbelieve the message on the occasion it is
+     * true.
+     */
+    @Test
+    fun `while the fix is still being acquired the guard is told so, not that it failed`() {
+        val current = state(fix = null, isAcquiringGps = true)
+
+        assertEquals(GpsBlock.WAITING, current.gpsBlock)
+        assertFalse(current.canCapture)
+        assertTrue(current.overlayLines.any { it == "Acquiring GPS…" })
+        assertFalse("must not claim failure while still trying",
+            current.overlayLines.any { it == "Location unavailable" })
+    }
+
+    // --- The geofence, enforced before the shutter rather than by the server hours later ---
+
+    private val clinic = Checkpoint(
+        2, "CLINIC", "Clinic", isActive = true,
+        latitude = 13.18982241, longitude = 121.19418619,
+    )
+
+    /**
+     * The real rejection this exists to prevent: a capture taken 8.8 km from the checkpoint, which
+     * the server refused long after the guard had walked away. The phone knows the distance the
+     * moment the fix lands, so it says so then and disables the shutter.
+     */
+    @Test
+    fun `a fix outside the geofence blocks capture and names the distance`() {
+        val eightKmAway = LocationFix(13.1725719, 121.2739113, accuracyMetres = 8f, timeMillis = 0)
+        val current = state(
+            fix = eightKmAway,
+            settings = AppSettings(geofenceRadiusMetres = 100f),
+            checkpoint = clinic,
+        )
+
+        assertEquals(GpsBlock.OUT_OF_RANGE, current.gpsBlock)
+        assertFalse("the shutter must be disabled", current.canCapture)
+
+        val distance = current.distanceToCheckpointMetres!!
+        assertTrue("distance is ~8.8 km, was $distance", distance in 8_700f..9_000f)
+    }
+
+    @Test
+    fun `a fix inside the geofence allows capture`() {
+        val atTheClinic = LocationFix(13.18985, 121.19420, accuracyMetres = 8f, timeMillis = 0)
+        val current = state(
+            fix = atTheClinic,
+            settings = AppSettings(geofenceRadiusMetres = 100f),
+            checkpoint = clinic,
+        )
+
+        assertNull(current.gpsBlock)
+        assertTrue(current.canCapture)
+    }
+
+    /** A checkpoint an admin never placed on the map cannot be fenced, and must not block anyone. */
+    @Test
+    fun `a checkpoint without coordinates is never out of range`() {
+        val current = state(fix = fix(8f), settings = AppSettings(geofenceRadiusMetres = 100f))
+
+        assertNull(current.distanceToCheckpointMetres)
+        assertNull(current.gpsBlock)
+        assertTrue(current.canCapture)
     }
 
     @Test

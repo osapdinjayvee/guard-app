@@ -9,6 +9,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,9 +21,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -50,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appetiser.guardapp.R
 import com.appetiser.guardapp.domain.model.AttendanceType
 import com.appetiser.guardapp.domain.model.Checkpoint
+import com.appetiser.guardapp.domain.model.Duty
 import com.appetiser.guardapp.ui.components.GuardCard
 import com.appetiser.guardapp.ui.components.PermissionGate
 import com.appetiser.guardapp.ui.components.ScreenTitle
@@ -82,14 +87,16 @@ fun SelfieScreen(
             rationale = "The photo proves you were at the checkpoint, and the location is recorded with it.",
         ) {
             val captured = state.capturedFile
-            if (captured != null) {
-                CapturedPreview(
+            when {
+                state.submitted -> SubmittedConfirmation(onDone = onCancel)
+                captured != null -> CapturedPreview(
                     path = captured.absolutePath,
+                    state = state,
                     onRetake = viewModel::retake,
-                    onConfirm = { /* duties acknowledgement lands in T-22 */ },
+                    onAcknowledge = viewModel::setDutiesAcknowledged,
+                    onSubmit = viewModel::submit,
                 )
-            } else {
-                LiveCapture(state, viewModel, onCancel)
+                else -> LiveCapture(state, viewModel, onCancel)
             }
         }
     }
@@ -219,8 +226,17 @@ private fun GpsNotice(block: GpsBlock, thresholdMetres: Float) {
 }
 
 @Composable
-private fun CapturedPreview(path: String, onRetake: () -> Unit, onConfirm: () -> Unit) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun CapturedPreview(
+    path: String,
+    state: SelfieUiState,
+    onRetake: () -> Unit,
+    onAcknowledge: (Boolean) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         // Decoded directly rather than pulling in an image-loading library for one file.
         val bitmap = remember(path) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
         if (bitmap == null) {
@@ -236,20 +252,38 @@ private fun CapturedPreview(path: String, onRetake: () -> Unit, onConfirm: () ->
                 .aspectRatio(3f / 4f)
                 .clip(RoundedCornerShape(24.dp)),
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             "The date, time, location and checkpoint are part of this image.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+
+        Spacer(Modifier.height(16.dp))
+        DutiesGate(
+            duty = state.duty,
+            acknowledged = state.dutiesAcknowledged,
+            onAcknowledge = onAcknowledge,
+        )
+
+        state.error?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        }
+
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onRetake, modifier = Modifier.weight(1f).height(54.dp)) {
+            OutlinedButton(
+                onClick = onRetake,
+                enabled = !state.isSubmitting,
+                modifier = Modifier.weight(1f).height(54.dp),
+            ) {
                 Text("Retake", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
             Button(
-                onClick = onConfirm,
+                onClick = onSubmit,
+                enabled = state.canSubmit,
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -257,8 +291,92 @@ private fun CapturedPreview(path: String, onRetake: () -> Unit, onConfirm: () ->
                 ),
                 modifier = Modifier.weight(1f).height(54.dp),
             ) {
-                Text("Use photo", fontWeight = FontWeight.Bold)
+                if (state.isSubmitting) {
+                    CircularProgressIndicator(
+                        Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Text("Submit", fontWeight = FontWeight.Bold)
+                }
             }
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+/**
+ * The Duties & Responsibilities acknowledgement gate (PRD §6). The checkbox drives
+ * [SelfieUiState.canSubmit]; the record cannot be committed until it is confirmed.
+ */
+@Composable
+private fun DutiesGate(duty: Duty?, acknowledged: Boolean, onAcknowledge: (Boolean) -> Unit) {
+    GuardCard {
+        Text(
+            duty?.title ?: "Duties & Responsibilities",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            duty?.content ?: "Duties are not available offline yet. They will sync when you are online.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = duty != null) { onAcknowledge(!acknowledged) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = acknowledged,
+                onCheckedChange = { onAcknowledge(it) },
+                enabled = duty != null,
+            )
+            Text(
+                "I have read and understood my duties and responsibilities.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubmittedConfirmation(onDone: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "Attendance recorded",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Saved on this device. It uploads automatically when you are online.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onDone,
+            shape = RoundedCornerShape(28.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+        ) {
+            Text("Done", fontWeight = FontWeight.Bold)
         }
     }
 }

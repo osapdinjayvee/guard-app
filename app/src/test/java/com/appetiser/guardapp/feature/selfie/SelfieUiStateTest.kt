@@ -97,6 +97,40 @@ class SelfieUiStateTest {
         assertFalse(current.canCapture)
     }
 
+    // --- Duties acknowledgement gate (PRD §6) ---
+
+    private fun capturedState() = state(fix = fix(8f)).copy(
+        capturedFile = java.io.File("/tmp/selfie.jpg"),
+    )
+
+    @Test
+    fun `submission is blocked until the duties checkbox is confirmed`() {
+        val unacknowledged = capturedState().copy(dutiesAcknowledged = false)
+
+        assertFalse(unacknowledged.canSubmit)
+    }
+
+    @Test
+    fun `an acknowledged capture can be submitted`() {
+        val acknowledged = capturedState().copy(dutiesAcknowledged = true)
+
+        assertTrue(acknowledged.canSubmit)
+    }
+
+    @Test
+    fun `there is nothing to submit before a photo is captured`() {
+        val noPhoto = state(fix = fix(8f)).copy(capturedFile = null, dutiesAcknowledged = true)
+
+        assertFalse(noPhoto.canSubmit)
+    }
+
+    @Test
+    fun `a submitted record cannot be submitted again`() {
+        val alreadyDone = capturedState().copy(dutiesAcknowledged = true, submitted = true)
+
+        assertFalse(alreadyDone.canSubmit)
+    }
+
     private companion object {
         /** 2026-07-10T06:02:11Z. */
         const val CAPTURED_AT = 1_783_663_331_000L

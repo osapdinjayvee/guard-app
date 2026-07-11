@@ -2,19 +2,26 @@ package com.appetiser.guardapp.data
 
 import com.appetiser.guardapp.core.common.Clock
 import com.appetiser.guardapp.core.database.AttendanceDao
+import com.appetiser.guardapp.core.database.AttendanceEntity
+import com.appetiser.guardapp.core.database.SyncStatus
+import com.appetiser.guardapp.core.database.AttendanceType as EntityAttendanceType
 import com.appetiser.guardapp.core.database.CheckpointDao
 import com.appetiser.guardapp.core.database.DutyDao
 import com.appetiser.guardapp.core.network.ApiErrorMapper
 import com.appetiser.guardapp.core.network.ApiResult
 import com.appetiser.guardapp.core.network.GuardApi
 import com.appetiser.guardapp.core.network.map
+import com.appetiser.guardapp.core.sync.SyncScheduler
 import com.appetiser.guardapp.domain.model.AppSettings
+import com.appetiser.guardapp.domain.model.AttendanceDraft
+import com.appetiser.guardapp.domain.model.AttendanceType
 import com.appetiser.guardapp.domain.model.AttendanceRecord
 import com.appetiser.guardapp.domain.model.Checkpoint
 import com.appetiser.guardapp.domain.model.CheckpointResolution
 import com.appetiser.guardapp.domain.model.Duty
 import com.appetiser.guardapp.domain.repository.AttendanceRepository
 import com.appetiser.guardapp.domain.repository.CheckpointRepository
+import com.appetiser.guardapp.domain.repository.ProfileRepository
 import com.appetiser.guardapp.domain.repository.DutyRepository
 import com.appetiser.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -102,10 +109,44 @@ class DefaultSettingsRepository @Inject constructor(
 @Singleton
 class DefaultAttendanceRepository @Inject constructor(
     private val dao: AttendanceDao,
+    private val profiles: ProfileRepository,
+    private val syncScheduler: SyncScheduler,
+    private val clock: Clock,
 ) : AttendanceRepository {
 
     override fun observeUnsyncedCount(): Flow<Int> = dao.observeUnsyncedCount()
 
     override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> =
         dao.observePage(limit).map { entities -> entities.map { it.toDomain() } }
+
+    override suspend fun submit(id: String, draft: AttendanceDraft) {
+        val now = clock.nowMillis()
+        // Insert first, then enqueue. If the insert throws the record is not committed and no
+        // sync is scheduled; if enqueue somehow fails the record is still safely PENDING and
+        // the periodic drain (T-24) picks it up.
+        dao.insert(
+            AttendanceEntity(
+                id = id,
+                userId = profiles.observe().first()?.id ?: 0L,
+                checkpointId = draft.checkpointId,
+                checkpointCode = draft.checkpointCode,
+                attendanceType = when (draft.type) {
+                    AttendanceType.TIME_IN -> EntityAttendanceType.TIME_IN
+                    AttendanceType.TIME_OUT -> EntityAttendanceType.TIME_OUT
+                },
+                selfiePath = draft.selfiePath,
+                capturedAt = draft.capturedAtMillis,
+                latitude = draft.latitude,
+                longitude = draft.longitude,
+                accuracy = draft.accuracyMetres,
+                dutiesAcknowledged = true,
+                dutiesVersionId = draft.dutiesVersionId,
+                deviceId = null,
+                syncStatus = SyncStatus.PENDING,
+                createdAt = now,
+                updatedAt = now,
+            )
+        )
+        syncScheduler.requestSync()
+    }
 }

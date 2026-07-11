@@ -78,6 +78,22 @@ enum class AttendanceType { TIME_IN, TIME_OUT }
 
 enum class SyncState { PENDING, SYNCING, SYNCED, FAILED, REJECTED }
 
+/**
+ * A completed capture, ready to become a durable attendance record. Everything here is settled
+ * on-device before submission; the server is never consulted first.
+ */
+data class AttendanceDraft(
+    val checkpointId: Long,
+    val checkpointCode: String,
+    val type: AttendanceType,
+    val selfiePath: String,
+    val capturedAtMillis: Long,
+    val latitude: Double?,
+    val longitude: Double?,
+    val accuracyMetres: Float?,
+    val dutiesVersionId: Long?,
+)
+
 data class AttendanceRecord(
     val id: String,
     val checkpointCode: String,

@@ -3,6 +3,7 @@ package com.appetiser.guardapp.domain.repository
 import com.appetiser.guardapp.core.network.ApiResult
 import com.appetiser.guardapp.domain.model.Announcement
 import com.appetiser.guardapp.domain.model.AppSettings
+import com.appetiser.guardapp.domain.model.AttendanceDraft
 import com.appetiser.guardapp.domain.model.AttendanceRecord
 import com.appetiser.guardapp.domain.model.Checkpoint
 import com.appetiser.guardapp.domain.model.CheckpointResolution
@@ -45,6 +46,15 @@ interface AttendanceRepository {
     fun observeUnsyncedCount(): Flow<Int>
 
     fun observeHistory(limit: Int = 50): Flow<List<AttendanceRecord>>
+
+    /**
+     * Commits a captured attendance record to the local database, then requests a sync. The
+     * record is durable the instant this returns — the write is local-first, never
+     * network-first, so a valid attendance is never lost to connectivity.
+     *
+     * @param id the client-generated UUID that is also the idempotency key.
+     */
+    suspend fun submit(id: String, draft: AttendanceDraft)
 }
 
 interface ProfileRepository {

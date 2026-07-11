@@ -8,9 +8,13 @@ import com.appetiser.guardapp.core.common.Clock
 import com.appetiser.guardapp.core.location.LocationFix
 import com.appetiser.guardapp.core.location.LocationProvider
 import com.appetiser.guardapp.domain.model.AppSettings
+import com.appetiser.guardapp.domain.model.AttendanceDraft
 import com.appetiser.guardapp.domain.model.AttendanceType
 import com.appetiser.guardapp.domain.model.Checkpoint
+import com.appetiser.guardapp.domain.model.Duty
 import com.appetiser.guardapp.domain.model.GpsFailurePolicy
+import com.appetiser.guardapp.domain.repository.AttendanceRepository
+import com.appetiser.guardapp.domain.repository.DutyRepository
 import com.appetiser.guardapp.domain.repository.ProfileRepository
 import com.appetiser.guardapp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,8 +44,15 @@ data class SelfieUiState(
     val nowMillis: Long = 0,
     val isCapturing: Boolean = false,
     val capturedFile: File? = null,
+    val duty: Duty? = null,
+    val dutiesAcknowledged: Boolean = false,
+    val isSubmitting: Boolean = false,
+    val submitted: Boolean = false,
     val error: String? = null,
 ) {
+    /** Submission is blocked until the guard confirms the duties checkbox (PRD §6). */
+    val canSubmit: Boolean
+        get() = capturedFile != null && dutiesAcknowledged && !isSubmitting && !submitted
     /** The lines burned into the image, and shown live over the preview. Same source, both places. */
     val overlayLines: List<String>
         get() = buildList {
@@ -73,6 +84,8 @@ data class SelfieUiState(
 class SelfieViewModel @Inject constructor(
     private val profiles: ProfileRepository,
     private val settings: SettingsRepository,
+    private val duties: DutyRepository,
+    private val attendance: AttendanceRepository,
     private val location: LocationProvider,
     private val selfieCapture: SelfieCapture,
     private val clock: Clock,
@@ -97,12 +110,56 @@ class SelfieViewModel @Inject constructor(
                 it.copy(
                     guardName = profiles.observe().first()?.name.orEmpty(),
                     settings = current,
+                    duty = duties.activeDuty(),
                     nowMillis = clock.nowMillis(),
                 )
             }
 
             val fix = location.currentFix(timeoutMillis = current.gpsTimeoutSeconds * 1_000L)
             _uiState.update { it.copy(fix = fix, nowMillis = clock.nowMillis()) }
+        }
+    }
+
+    fun setDutiesAcknowledged(acknowledged: Boolean) =
+        _uiState.update { it.copy(dutiesAcknowledged = acknowledged) }
+
+    /**
+     * The commit. Writes the record to Room and enqueues a sync — local-first, so the
+     * attendance is durable the instant this succeeds, with or without a network.
+     */
+    fun submit() {
+        val state = _uiState.value
+        val file = state.capturedFile
+        val checkpoint = state.checkpoint
+        val type = state.type
+        if (!state.canSubmit || file == null || checkpoint == null || type == null) return
+
+        _uiState.update { it.copy(isSubmitting = true, error = null) }
+
+        viewModelScope.launch {
+            runCatching {
+                attendance.submit(
+                    id = recordId,
+                    draft = AttendanceDraft(
+                        checkpointId = checkpoint.id,
+                        checkpointCode = checkpoint.code,
+                        type = type,
+                        selfiePath = file.absolutePath,
+                        capturedAtMillis = state.nowMillis,
+                        latitude = state.fix?.latitude,
+                        longitude = state.fix?.longitude,
+                        accuracyMetres = state.fix?.accuracyMetres,
+                        dutiesVersionId = state.duty?.id,
+                    ),
+                )
+            }.fold(
+                onSuccess = { _uiState.update { it.copy(isSubmitting = false, submitted = true) } },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(isSubmitting = false, error = error.message ?: "Could not save the record.")
+                    }
+                },
+            )
         }
     }
 

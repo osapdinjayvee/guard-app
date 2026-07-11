@@ -27,6 +27,9 @@ class AttendanceSubmitTest {
         override suspend fun byId(id: String) = inserted.firstOrNull { it.id == id }
         override fun observeById(id: String): Flow<AttendanceEntity?> = MutableStateFlow(inserted.firstOrNull { it.id == id })
         override suspend fun requeue(id: String, now: Long) = 0
+        var requeueAllCalls = 0
+        override suspend fun requeueAll(now: Long): Int { requeueAllCalls++; return 0 }
+        override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceEntity>> = MutableStateFlow(inserted)
         override fun observePage(limit: Int, offset: Int): Flow<List<AttendanceEntity>> = MutableStateFlow(inserted)
         override fun observeUnsyncedCount(statuses: List<SyncStatus>): Flow<Int> = MutableStateFlow(0)
@@ -42,7 +45,10 @@ class AttendanceSubmitTest {
 
     private class RecordingScheduler : SyncScheduler {
         var syncRequests = 0
+        var syncNowRequests = 0
         override fun requestSync() { syncRequests++ }
+        override fun syncNow() { syncNowRequests++ }
+        override fun observeSyncing(): Flow<Boolean> = MutableStateFlow(false)
     }
 
     private class FakeProfiles(private val profile: GuardProfile?) : ProfileRepository {
@@ -65,6 +71,23 @@ class AttendanceSubmitTest {
 
     private fun repo(dao: AttendanceDao, scheduler: SyncScheduler, profile: GuardProfile?) =
         DefaultAttendanceRepository(dao, FakeProfiles(profile), scheduler, Clock { 5_000L })
+
+    /**
+     * "Sync now" has to do both halves. Re-queueing without draining leaves the records sitting
+     * there; draining without re-queueing skips the FAILED and REJECTED rows entirely, which are
+     * the very ones a guard taps the button about.
+     */
+    @Test
+    fun `sync now un-sticks failed records and forces a drain`() = runTest {
+        val dao = RecordingDao()
+        val scheduler = RecordingScheduler()
+
+        repo(dao, scheduler, GuardProfile(1, "Juan", "guard01")).syncNow()
+
+        assertEquals("stuck records must be re-queued", 1, dao.requeueAllCalls)
+        assertEquals("the drain must be forced, not merely requested", 1, scheduler.syncNowRequests)
+        assertEquals("the KEEP-policy path would be dropped behind a stale request", 0, scheduler.syncRequests)
+    }
 
     @Test
     fun `submit writes the record as PENDING then requests a sync`() = runTest {

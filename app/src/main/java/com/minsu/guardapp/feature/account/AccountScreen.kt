@@ -16,15 +16,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,102 +38,194 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
+import com.minsu.guardapp.BuildConfig
 import com.minsu.guardapp.R
+import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.GuardProfile
-import com.minsu.guardapp.domain.repository.AuthRepository
-import com.minsu.guardapp.core.security.LockPreferences
-import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.ScreenTitle
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class AccountViewModel @Inject constructor(
-    profiles: ProfileRepository,
-    private val auth: AuthRepository,
-    private val lockPreferences: LockPreferences,
-) : ViewModel() {
-    val profile: StateFlow<GuardProfile?> = profiles.observe()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+@Composable
+fun AccountScreen(viewModel: AccountViewModel = hiltViewModel()) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val snackbars = remember { SnackbarHostState() }
 
-    val lockEnabled: StateFlow<Boolean> = lockPreferences.enabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
-
-    fun setLockEnabled(enabled: Boolean) = viewModelScope.launch {
-        lockPreferences.setEnabled(enabled)
-        // Once the guard makes a deliberate choice here, the one-time prompt is moot.
-        lockPreferences.markSetupSeen()
+    LaunchedEffect(message) {
+        message?.let {
+            snackbars.showSnackbar(it)
+            viewModel.messageShown()
+        }
     }
 
-    /** Clears the session, and the lock choice so the next guard on a shared device is asked. */
-    fun signOut() = viewModelScope.launch {
-        lockPreferences.clear()
-        auth.logout()
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbars) },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ScreenTitle("Account")
+
+            ProfileCard(state.profile)
+
+            SyncCard(state, onSyncNow = viewModel::syncNow)
+
+            GuardCard {
+                ToggleRow(
+                    iconRes = R.drawable.ic_finger_print,
+                    title = "App lock",
+                    subtitle = "Require biometrics or your device PIN to reopen",
+                    checked = state.lockEnabled,
+                    onCheckedChange = viewModel::setLockEnabled,
+                )
+            }
+
+            CaptureCard(state.settings)
+
+            AboutCard()
+
+            GuardCard {
+                AccountRow(
+                    R.drawable.ic_send,
+                    "Sign out",
+                    "Clear this session on the device",
+                    onClick = viewModel::signOut,
+                )
+            }
+        }
     }
 }
 
 /**
- * Reports and Settings live here. The bottom bar mirrors the portal exactly (Home, Scan QR,
- * Generate QR, History, Account), which leaves no bar slot for the PRD's Reports and Settings
- * destinations.
+ * The queue, and the button that drains it.
+ *
+ * Sync state is user-visible state, not an internal detail: a guard whose phone is holding an
+ * unsent attendance needs to know that, and needs to be able to do something about it.
  */
 @Composable
-fun AccountScreen(viewModel: AccountViewModel = hiltViewModel()) {
-    val profile by viewModel.profile.collectAsStateWithLifecycle()
-    val lockEnabled by viewModel.lockEnabled.collectAsStateWithLifecycle()
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        ScreenTitle("Account")
-
-        ProfileCard(profile)
-
-        GuardCard {
-            ToggleRow(
-                iconRes = R.drawable.ic_finger_print,
-                title = "App lock",
-                subtitle = "Require biometrics or your device PIN to reopen",
-                checked = lockEnabled,
-                onCheckedChange = viewModel::setLockEnabled,
-            )
+private fun SyncCard(state: AccountUiState, onSyncNow: () -> Unit) {
+    GuardCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (state.hasQueue) "${state.pendingCount + state.stuckCount} record(s) waiting" else "All records synced",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    when {
+                        !state.isOnline && state.hasQueue ->
+                            "Offline — they upload automatically when you reconnect"
+                        !state.isOnline -> "Offline — nothing is waiting"
+                        state.stuckCount > 0 ->
+                            "${state.stuckCount} the server would not accept. Sync now to try again."
+                        state.pendingCount > 0 -> "Uploading in the background"
+                        else -> "Nothing queued on this device"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.stuckCount > 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            if (state.isSyncing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
 
-        GuardCard {
-            AccountRow(R.drawable.ic_grades, "Reports", "Daily, weekly and monthly summaries")
-            Divider()
-            AccountRow(R.drawable.ic_document, "Duties & responsibilities", "Read the current revision")
-            Divider()
-            AccountRow(R.drawable.ic_locator, "Checkpoints", "Cached for offline scanning")
-        }
+        Divider()
 
-        GuardCard {
-            AccountRow(R.drawable.ic_dtr, "Sync now", "Upload any queued attendance")
-            Divider()
-            AccountRow(R.drawable.ic_bell, "Notifications", "Announcements from the office")
-            Divider()
-            AccountRow(R.drawable.ic_send, "Sign out", "Clear this session on the device", onClick = viewModel::signOut)
-        }
+        AccountRow(
+            iconRes = R.drawable.ic_dtr,
+            title = "Sync now",
+            subtitle = "Upload any queued attendance, and retry anything stuck",
+            onClick = onSyncNow,
+        )
+    }
+}
 
+/**
+ * Capture settings are shown but not editable: they come from `GET /settings` and the server owns
+ * them, so that tightening image quality across every handset is a config change rather than a
+ * release. Presenting them as controls the guard could change would be a lie.
+ */
+@Composable
+private fun CaptureCard(settings: AppSettings) {
+    GuardCard {
         Text(
-            "GuardApp 0.1.0",
-            modifier = Modifier.fillMaxWidth(),
+            "Capture",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(8.dp))
+        InfoRow("Selfie quality", "${settings.imageQuality}%")
+        InfoRow("Selfie size limit", "${settings.imageMaxDimensionPx} px")
+        InfoRow("GPS accuracy required", "${settings.gpsAccuracyThresholdMetres.toInt()} m")
+        InfoRow(
+            "Without GPS",
+            if (settings.gpsFailurePolicy.name == "BLOCK") "Submission blocked" else "Submission allowed",
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Set by the office and applied to every device.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AboutCard() {
+    GuardCard {
+        Text(
+            "About",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(8.dp))
+        InfoRow("Version", BuildConfig.VERSION_NAME)
+        InfoRow("Server", BuildConfig.API_BASE_URL.toHost())
+    }
+}
+
+/** Just the host: the guard needs to know *which* server, not the path it speaks to. */
+private fun String.toHost(): String =
+    runCatching { java.net.URI(this).host ?: this }.getOrDefault(this)
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -203,7 +301,7 @@ private fun ToggleRow(
 }
 
 @Composable
-private fun AccountRow(iconRes: Int, title: String, subtitle: String, onClick: () -> Unit = {}) {
+private fun AccountRow(iconRes: Int, title: String, subtitle: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -242,5 +340,4 @@ private fun Divider() {
         modifier = Modifier.padding(vertical = 2.dp),
         color = MaterialTheme.colorScheme.outline,
     )
-    Spacer(Modifier.height(0.dp))
 }

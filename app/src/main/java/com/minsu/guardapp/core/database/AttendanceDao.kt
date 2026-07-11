@@ -46,6 +46,27 @@ interface AttendanceDao {
     )
     suspend fun requeue(id: String, now: Long): Int
 
+    /**
+     * The same escape hatch, for every stuck record at once: what "Sync now" is actually for.
+     *
+     * A guard who taps it is telling us the thing that blocked these records — no signal, a lapsed
+     * token, a checkpoint an admin had disabled and has now fixed — is over. Backoff is cleared so
+     * the next pass claims them immediately rather than honouring a wait that was calculated for a
+     * world that no longer exists.
+     */
+    @Query(
+        """
+        UPDATE attendance
+        SET syncStatus = 'PENDING', nextAttemptAt = NULL, lastError = NULL, updatedAt = :now
+        WHERE syncStatus IN ('FAILED', 'REJECTED')
+        """
+    )
+    suspend fun requeueAll(now: Long): Int
+
+    /** Records the server has refused or failed to take. Surfaced so they are never silent. */
+    @Query("SELECT COUNT(*) FROM attendance WHERE syncStatus IN ('FAILED', 'REJECTED')")
+    fun observeStuckCount(): Flow<Int>
+
     @Query("SELECT * FROM attendance ORDER BY capturedAt DESC LIMIT :limit OFFSET :offset")
     fun observePage(limit: Int, offset: Int = 0): Flow<List<AttendanceEntity>>
 

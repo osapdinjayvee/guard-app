@@ -58,6 +58,8 @@ class HomeViewModelTest {
         override suspend fun submit(id: String, draft: com.minsu.guardapp.domain.model.AttendanceDraft) = Unit
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
         override suspend fun retry(id: String) = Unit
+        override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
+        override suspend fun syncNow(): Int = 0
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
     }
     private val settingsRepo = object : SettingsRepository {

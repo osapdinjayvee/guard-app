@@ -128,6 +128,19 @@ class DefaultAttendanceRepository @Inject constructor(
         if (dao.requeue(id, clock.nowMillis()) > 0) syncScheduler.requestSync()
     }
 
+    override fun observeStuckCount(): Flow<Int> = dao.observeStuckCount()
+
+    /**
+     * Unlike [retry], this always drains — even when nothing was stuck. The queue may hold records
+     * that are merely PENDING behind a network that has just come back, and the guard tapping the
+     * button is entitled to see them go.
+     */
+    override suspend fun syncNow(): Int {
+        val requeued = dao.requeueAll(clock.nowMillis())
+        syncScheduler.syncNow()
+        return requeued
+    }
+
     override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
         dao.observeInRange(fromMillis, toMillis).map { entities -> entities.map { it.toDomain() } }
 

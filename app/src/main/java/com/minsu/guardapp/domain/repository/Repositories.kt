@@ -53,6 +53,15 @@ interface AttendanceRepository {
     /** Re-queues a failed or rejected record and requests a sync. No-op for other states. */
     suspend fun retry(id: String)
 
+    /** Records the server would not take. Never hidden: a rejected attendance is the guard's problem to see. */
+    fun observeStuckCount(): Flow<Int>
+
+    /**
+     * Re-queues every failed or rejected record and drains the queue now. Returns how many were
+     * un-stuck, which is what "Sync now" reports back.
+     */
+    suspend fun syncNow(): Int
+
     /** Local records captured within [fromMillis, toMillis). The source for Reports. */
     fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>>
 

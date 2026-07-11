@@ -47,6 +47,12 @@ interface AttendanceRepository {
 
     fun observeHistory(limit: Int = 50): Flow<List<AttendanceRecord>>
 
+    /** One record, live: the detail screen follows its sync status as the worker runs. */
+    fun observeRecord(id: String): Flow<AttendanceRecord?>
+
+    /** Re-queues a failed or rejected record and requests a sync. No-op for other states. */
+    suspend fun retry(id: String)
+
     /**
      * Commits a captured attendance record to the local database, then requests a sync. The
      * record is durable the instant this returns — the write is local-first, never

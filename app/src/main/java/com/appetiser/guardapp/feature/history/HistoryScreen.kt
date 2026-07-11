@@ -1,6 +1,7 @@
 package com.appetiser.guardapp.feature.history
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +58,14 @@ class HistoryViewModel @Inject constructor(
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel = hiltViewModel()) {
     val records by viewModel.records.collectAsStateWithLifecycle()
+    // A nested route rather than a scaffold destination: detail belongs to History, and the
+    // bottom bar should stay on the History tab while it is open. Survives rotation via rememberSaveable.
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    selectedId?.let { id ->
+        HistoryDetailScreen(recordId = id, onBack = { selectedId = null })
+        return
+    }
 
     Column(
         Modifier
@@ -74,7 +86,9 @@ fun HistoryScreen(viewModel: HistoryViewModel = hiltViewModel()) {
             CountChip(records.size)
             Spacer(Modifier.height(12.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(records, key = { it.id }) { HistoryRow(it) }
+                items(records, key = { it.id }) { record ->
+                    HistoryRow(record, onClick = { selectedId = record.id })
+                }
             }
         }
     }
@@ -102,8 +116,8 @@ private fun CountChip(count: Int) {
 }
 
 @Composable
-private fun HistoryRow(record: AttendanceRecord) {
-    GuardCard {
+private fun HistoryRow(record: AttendanceRecord, onClick: () -> Unit) {
+    GuardCard(modifier = Modifier.clickable(onClick = onClick)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,

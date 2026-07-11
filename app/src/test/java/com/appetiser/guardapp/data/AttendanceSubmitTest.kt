@@ -25,6 +25,8 @@ class AttendanceSubmitTest {
         val inserted = mutableListOf<AttendanceEntity>()
         override suspend fun insert(record: AttendanceEntity) { inserted += record }
         override suspend fun byId(id: String) = inserted.firstOrNull { it.id == id }
+        override fun observeById(id: String): Flow<AttendanceEntity?> = MutableStateFlow(inserted.firstOrNull { it.id == id })
+        override suspend fun requeue(id: String, now: Long) = 0
         override fun observePage(limit: Int, offset: Int): Flow<List<AttendanceEntity>> = MutableStateFlow(inserted)
         override fun observeUnsyncedCount(statuses: List<SyncStatus>): Flow<Int> = MutableStateFlow(0)
         override suspend fun eligibleForSync(now: Long, limit: Int, statuses: List<SyncStatus>) = emptyList<AttendanceEntity>()

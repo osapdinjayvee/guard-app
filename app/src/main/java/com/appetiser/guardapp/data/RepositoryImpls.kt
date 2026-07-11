@@ -119,6 +119,15 @@ class DefaultAttendanceRepository @Inject constructor(
     override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> =
         dao.observePage(limit).map { entities -> entities.map { it.toDomain() } }
 
+    override fun observeRecord(id: String): Flow<AttendanceRecord?> =
+        dao.observeById(id).map { it?.toDomain() }
+
+    override suspend fun retry(id: String) {
+        // Only re-queue if the record was actually in a retriable-by-hand state; requesting a
+        // sync for a record that did not move would just spin the worker for nothing.
+        if (dao.requeue(id, clock.nowMillis()) > 0) syncScheduler.requestSync()
+    }
+
     override suspend fun submit(id: String, draft: AttendanceDraft) {
         val now = clock.nowMillis()
         // Insert first, then enqueue. If the insert throws the record is not committed and no

@@ -16,8 +16,8 @@ enum class GuardDestination(
 ) {
     Home("home", "Home", R.drawable.ic_nav_home),
     History("history", "History", R.drawable.ic_nav_history),
-    ScanQr("scan", "Scan QR", R.drawable.ic_qrcode_fab),
-    Reports("reports", "Reports", R.drawable.ic_grades),
+    ScanQr("scan", "Scan QR", R.drawable.ic_nav_scan),
+    Reports("reports", "Reports", R.drawable.ic_nav_reports),
     Account("account", "Account", R.drawable.ic_nav_account),
 }
 

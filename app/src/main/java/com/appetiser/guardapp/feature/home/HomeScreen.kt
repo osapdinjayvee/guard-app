@@ -195,7 +195,7 @@ private data class Action(val icon: Int, val label: String)
 @Composable
 private fun QuickActions() {
     val actions = listOf(
-        Action(R.drawable.ic_attendance, "Attendance"),
+        Action(R.drawable.ic_finger_print, "Attendance"),
         Action(R.drawable.ic_dtr, "DTR"),
         Action(R.drawable.ic_grades, "Reports"),
         Action(R.drawable.ic_calendar, "Schedule"),

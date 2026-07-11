@@ -19,6 +19,23 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance WHERE id = :id")
     suspend fun byId(id: String): AttendanceEntity?
 
+    @Query("SELECT * FROM attendance WHERE id = :id")
+    fun observeById(id: String): Flow<AttendanceEntity?>
+
+    /**
+     * Manual retry of a failed or rejected record: back to PENDING, backoff cleared, so the next
+     * sync claims it immediately. A REJECTED record only ever leaves that state this way — by the
+     * guard explicitly asking, never automatically.
+     */
+    @Query(
+        """
+        UPDATE attendance
+        SET syncStatus = 'PENDING', nextAttemptAt = NULL, lastError = NULL, updatedAt = :now
+        WHERE id = :id AND syncStatus IN ('FAILED', 'REJECTED')
+        """
+    )
+    suspend fun requeue(id: String, now: Long): Int
+
     @Query("SELECT * FROM attendance ORDER BY capturedAt DESC LIMIT :limit OFFSET :offset")
     fun observePage(limit: Int, offset: Int = 0): Flow<List<AttendanceEntity>>
 

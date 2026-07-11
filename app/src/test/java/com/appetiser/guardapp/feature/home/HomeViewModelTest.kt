@@ -54,6 +54,8 @@ class HomeViewModelTest {
         override fun observeUnsyncedCount(): Flow<Int> = pending
         override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> = history
         override suspend fun submit(id: String, draft: com.appetiser.guardapp.domain.model.AttendanceDraft) = Unit
+        override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
+        override suspend fun retry(id: String) = Unit
     }
     private val settingsRepo = object : SettingsRepository {
         override fun observe(): Flow<AppSettings> = settings

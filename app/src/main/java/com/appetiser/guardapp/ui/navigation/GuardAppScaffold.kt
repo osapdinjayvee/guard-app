@@ -121,11 +121,10 @@ private fun CentreAction(selected: Boolean, onClick: () -> Unit, modifier: Modif
                 .size(FabSize)
                 .semantics { contentDescription = GuardDestination.ScanQr.label },
         ) {
-            // Two-tone drawable: its own white and amber, so it must not be tinted.
             Icon(
                 painter = painterResource(GuardDestination.ScanQr.icon),
                 contentDescription = null,
-                tint = Color.Unspecified,
+                tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(26.dp),
             )
         }

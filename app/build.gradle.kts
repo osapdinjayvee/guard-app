@@ -30,9 +30,23 @@ android {
 
     buildTypes {
         debug {
-            // Points at the MockWebServer stub until the backend exists (T-10).
-            // 10.0.2.2 is the host machine as seen from the Android emulator.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/api/\"")
+            // Production. It has a real Let's Encrypt certificate, so nothing special is needed to
+            // reach it — LocalBackendModule's DNS and certificate overrides switch themselves off
+            // for any host that is not `.test`.
+            buildConfigField("String", "API_BASE_URL", "\"https://guard.minsu.edu.ph/api/\"")
+            // To develop against the local WSL backend instead, swap the line above for
+            //     https://guard.test/api/
+            // and first run:  adb reverse tcp:443 tcp:443
+            // That tunnels the handset's :443 to the host's loopback, where WSL already forwards
+            // nginx. It is the one setting that works on an emulator and a physical phone alike:
+            // 10.0.2.2 is emulator-only, and the host's LAN address does not work at all, because
+            // WSL forwards loopback but not the LAN interface. The tunnel does not survive a
+            // reconnect — re-run it after replugging.
+            buildConfigField("String", "BACKEND_HOST", "\"127.0.0.1\"")
+            // Flip to true to work against canned responses with no backend at all. The mock
+            // interceptor only exists in the debug source set, so a release build cannot serve
+            // fake data even by accident.
+            buildConfigField("boolean", "USE_MOCK_API", "false")
         }
         release {
             isMinifyEnabled = false
@@ -40,8 +54,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Placeholder. The real host is not yet known; the backend repo does not exist.
-            buildConfigField("String", "API_BASE_URL", "\"https://api.example.invalid/api/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://guard.minsu.edu.ph/api/\"")
         }
     }
     compileOptions {

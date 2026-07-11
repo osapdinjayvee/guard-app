@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only. A release APK has no network security config and therefore trusts exactly the
+  system CAs, as it should.
+
+  The Laravel backend runs under WSL and is served over TLS as guard.test with a certificate it
+  signed itself, which no device trusts and none should by default. Rather than weakening trust
+  globally, that certificate is pinned to the single domain it belongs to: every other host,
+  including any real API, is still validated against the system store.
+
+  `guard_test_ca.pem` is the certificate the server actually presents. If the site is ever
+  re-issued a new certificate, replace this file — the pin is on the key, not the name.
+-->
+<network-security-config>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">guard.test</domain>
+        <trust-anchors>
+            <certificates src="@raw/guard_test_ca" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- The emulator's route to the host machine, for a backend served over plain HTTP. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+</network-security-config>

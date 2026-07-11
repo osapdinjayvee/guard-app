@@ -3,6 +3,7 @@ package com.minsu.guardapp.core.di
 import com.minsu.guardapp.BuildConfig
 import com.minsu.guardapp.core.network.AuthInterceptor
 import com.minsu.guardapp.core.network.GuardApi
+import com.minsu.guardapp.core.network.OkHttpCustomizer
 import com.squareup.moshi.Moshi
 import dagger.Module
 import dagger.Provides
@@ -30,6 +31,8 @@ object NetworkModule {
         authInterceptor: AuthInterceptor,
         // Empty in release. The debug source set contributes the mock API interceptor.
         interceptors: Set<@JvmSuppressWildcards Interceptor>,
+        // Empty in release. The debug source set contributes the local backend's DNS and cert.
+        customizers: Set<@JvmSuppressWildcards OkHttpCustomizer>,
     ): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             // BODY would print the Sanctum token on every authenticated call.
@@ -53,6 +56,7 @@ object NetworkModule {
             // Selfie uploads are large and the network is assumed to be poor.
             .writeTimeout(60, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            .apply { customizers.forEach { it.customize(this) } }
             .build()
     }
 

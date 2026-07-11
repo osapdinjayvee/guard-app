@@ -40,7 +40,8 @@ class DefaultAttendanceUploader @Inject constructor(
         api.submitAttendance(
             clientUuid = record.id.text(),
             checkpointId = record.checkpointId.toString().text(),
-            attendanceType = record.attendanceType.name.text(),
+            // The wire format is snake_case (`time_in`), not the enum's own name.
+            attendanceType = record.attendanceType.wireName.text(),
             // ISO 8601 with the offset, so the server can tell device-capture time from receipt.
             capturedAt = iso8601(record.capturedAt).text(),
             dutiesAcknowledged = record.dutiesAcknowledged.toString().text(),

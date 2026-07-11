@@ -1,5 +1,6 @@
 package com.minsu.guardapp.core.di
 
+import com.minsu.guardapp.core.network.OkHttpCustomizer
 import dagger.Module
 import dagger.multibindings.Multibinds
 import dagger.hilt.InstallIn
@@ -19,4 +20,8 @@ abstract class InterceptorModule {
 
     @Multibinds
     abstract fun interceptors(): Set<Interceptor>
+
+    /** Empty in release. Debug contributes the local backend's DNS and certificate. */
+    @Multibinds
+    abstract fun okHttpCustomizers(): Set<OkHttpCustomizer>
 }

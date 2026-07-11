@@ -25,7 +25,10 @@ fun CheckpointDto.toEntity(now: Long) = CheckpointEntity(
     description = description,
     latitude = latitude,
     longitude = longitude,
-    status = status,
+    // Canonicalised on the way in. The backend spells this `active`, the cache queries for
+    // `ACTIVE`, and SQLite's `=` is case-sensitive — storing the wire value verbatim leaves every
+    // checkpoint present but invisible to `observeActive()`.
+    status = status.uppercase(),
     updatedAt = now,
 )
 

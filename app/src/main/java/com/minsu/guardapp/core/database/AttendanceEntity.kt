@@ -70,7 +70,22 @@ data class AttendanceEntity(
     val updatedAt: Long,
 )
 
-enum class AttendanceType { TIME_IN, TIME_OUT }
+enum class AttendanceType {
+    TIME_IN,
+    TIME_OUT,
+    ;
+
+    /**
+     * How the API spells this. Kept separate from [name], which Room persists — changing the wire
+     * format must not silently rewrite what is already in the database.
+     */
+    val wireName: String get() = name.lowercase()
+
+    companion object {
+        fun fromWire(value: String): AttendanceType? =
+            entries.firstOrNull { it.wireName.equals(value, ignoreCase = true) }
+    }
+}
 
 class AttendanceTypeConverter {
     @androidx.room.TypeConverter

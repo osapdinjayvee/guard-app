@@ -87,16 +87,16 @@ fun LoginScreen(
 
         Spacer(Modifier.height(32.dp))
 
-        FieldLabel("Username")
+        FieldLabel("Email")
         OutlinedTextField(
             value = state.username,
             onValueChange = onUsernameChange,
-            placeholder = { Text("guard01") },
+            placeholder = { Text("you@minsu.edu.ph") },
             singleLine = true,
             enabled = !state.isSubmitting,
             shape = RoundedCornerShape(28.dp),
             colors = fieldColours(),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth(),
         )
 

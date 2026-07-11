@@ -20,6 +20,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +38,7 @@ import androidx.lifecycle.viewModelScope
 import com.appetiser.guardapp.R
 import com.appetiser.guardapp.domain.model.GuardProfile
 import com.appetiser.guardapp.domain.repository.AuthRepository
+import com.appetiser.guardapp.core.security.LockPreferences
 import com.appetiser.guardapp.domain.repository.ProfileRepository
 import com.appetiser.guardapp.ui.components.GuardCard
 import com.appetiser.guardapp.ui.components.ScreenTitle
@@ -50,12 +53,25 @@ import javax.inject.Inject
 class AccountViewModel @Inject constructor(
     profiles: ProfileRepository,
     private val auth: AuthRepository,
+    private val lockPreferences: LockPreferences,
 ) : ViewModel() {
     val profile: StateFlow<GuardProfile?> = profiles.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Clears the session. The auth gate observes it and swaps back to login on its own. */
-    fun signOut() = viewModelScope.launch { auth.logout() }
+    val lockEnabled: StateFlow<Boolean> = lockPreferences.enabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setLockEnabled(enabled: Boolean) = viewModelScope.launch {
+        lockPreferences.setEnabled(enabled)
+        // Once the guard makes a deliberate choice here, the one-time prompt is moot.
+        lockPreferences.markSetupSeen()
+    }
+
+    /** Clears the session, and the lock choice so the next guard on a shared device is asked. */
+    fun signOut() = viewModelScope.launch {
+        lockPreferences.clear()
+        auth.logout()
+    }
 }
 
 /**
@@ -66,6 +82,7 @@ class AccountViewModel @Inject constructor(
 @Composable
 fun AccountScreen(viewModel: AccountViewModel = hiltViewModel()) {
     val profile by viewModel.profile.collectAsStateWithLifecycle()
+    val lockEnabled by viewModel.lockEnabled.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -79,6 +96,16 @@ fun AccountScreen(viewModel: AccountViewModel = hiltViewModel()) {
         ScreenTitle("Account")
 
         ProfileCard(profile)
+
+        GuardCard {
+            ToggleRow(
+                iconRes = R.drawable.ic_finger_print,
+                title = "App lock",
+                subtitle = "Require biometrics or your device PIN to reopen",
+                checked = lockEnabled,
+                onCheckedChange = viewModel::setLockEnabled,
+            )
+        }
 
         GuardCard {
             AccountRow(R.drawable.ic_grades, "Reports", "Daily, weekly and monthly summaries")
@@ -139,6 +166,39 @@ private fun ProfileCard(profile: GuardProfile?) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    iconRes: Int,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.padding(10.dp).size(22.dp),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary),
+        )
     }
 }
 

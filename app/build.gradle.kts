@@ -13,13 +13,13 @@ val appVersion = Properties().apply {
 }
 
 android {
-    namespace = "com.appetiser.guardapp"
+    namespace = "com.minsu.guardapp"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.appetiser.guardapp"
+        applicationId = "com.minsu.guardapp"
         minSdk = 24
         targetSdk = 36
         versionCode = appVersion.getProperty("versionCode").toInt()

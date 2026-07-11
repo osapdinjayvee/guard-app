@@ -22,6 +22,16 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance WHERE id = :id")
     fun observeById(id: String): Flow<AttendanceEntity?>
 
+    /** Records captured within a half-open range [from, to), newest first. Drives Reports. */
+    @Query(
+        """
+        SELECT * FROM attendance
+        WHERE capturedAt >= :fromMillis AND capturedAt < :toMillis
+        ORDER BY capturedAt DESC
+        """
+    )
+    fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceEntity>>
+
     /**
      * Manual retry of a failed or rejected record: back to PENDING, backoff cleared, so the next
      * sync claims it immediately. A REJECTED record only ever leaves that state this way — by the

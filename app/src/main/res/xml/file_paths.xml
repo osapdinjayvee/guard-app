@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Generated report PDFs live in cache/reports and are shared read-only. -->
+    <cache-path name="reports" path="reports/" />
+</paths>

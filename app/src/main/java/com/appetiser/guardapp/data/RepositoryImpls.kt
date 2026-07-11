@@ -128,6 +128,9 @@ class DefaultAttendanceRepository @Inject constructor(
         if (dao.requeue(id, clock.nowMillis()) > 0) syncScheduler.requestSync()
     }
 
+    override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
+        dao.observeInRange(fromMillis, toMillis).map { entities -> entities.map { it.toDomain() } }
+
     override suspend fun submit(id: String, draft: AttendanceDraft) {
         val now = clock.nowMillis()
         // Insert first, then enqueue. If the insert throws the record is not committed and no

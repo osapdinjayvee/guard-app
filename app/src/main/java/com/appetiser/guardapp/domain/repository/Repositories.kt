@@ -53,6 +53,9 @@ interface AttendanceRepository {
     /** Re-queues a failed or rejected record and requests a sync. No-op for other states. */
     suspend fun retry(id: String)
 
+    /** Local records captured within [fromMillis, toMillis). The source for Reports. */
+    fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>>
+
     /**
      * Commits a captured attendance record to the local database, then requests a sync. The
      * record is durable the instant this returns — the write is local-first, never

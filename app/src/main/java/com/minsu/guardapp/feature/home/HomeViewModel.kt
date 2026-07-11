@@ -9,6 +9,7 @@ import com.minsu.guardapp.domain.model.GuardProfile
 import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
+import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +38,7 @@ class HomeViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val announcements: AnnouncementRepository,
     private val checkpoints: CheckpointRepository,
+    private val duties: DutyRepository,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
@@ -90,6 +92,11 @@ class HomeViewModel @Inject constructor(
             settings.refresh()
             announcements.refresh()
             checkpoints.refresh()
+            // Cached here, on the one screen that is reliably online, because the place it is
+            // *needed* is the acknowledgement gate at the end of a capture — which may well be
+            // happening in a basement with no signal. Fetching it there would leave the guard
+            // unable to submit an attendance they have already taken.
+            duties.refresh()
             _uiState.update { it.copy(isRefreshing = false) }
         }
     }

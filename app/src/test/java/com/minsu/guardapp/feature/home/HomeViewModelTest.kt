@@ -14,6 +14,7 @@ import com.minsu.guardapp.domain.model.SyncState
 import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
+import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,7 @@ class HomeViewModelTest {
     private val online = MutableStateFlow(true)
 
     private var checkpointRefreshes = 0
+    private var dutyRefreshes = 0
 
     private val profileRepo = object : ProfileRepository {
         override fun observe(): Flow<GuardProfile?> = profiles
@@ -75,6 +77,13 @@ class HomeViewModelTest {
             return ApiResult.Success(Unit)
         }
     }
+    private val dutyRepo = object : DutyRepository {
+        override suspend fun activeDuty(): Duty? = null
+        override suspend fun refresh(): ApiResult<Unit> {
+            dutyRefreshes++
+            return ApiResult.Success(Unit)
+        }
+    }
     private val monitor = object : NetworkMonitor {
         override val isOnline: Flow<Boolean> = online
     }
@@ -86,7 +95,7 @@ class HomeViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel() =
-        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, monitor)
+        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, monitor)
 
     @Test
     fun `streams local state without waiting on the network`() = runTest {
@@ -160,7 +169,7 @@ class HomeViewModelTest {
             override suspend fun clear() = Unit
         }
 
-        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, monitor)
+        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, monitor)
 
         assertEquals("Juan Dela Cruz", vm.uiState.value.profile?.name)
         assertFalse(vm.uiState.value.isRefreshing)
@@ -171,6 +180,18 @@ class HomeViewModelTest {
         viewModel()
 
         assertEquals("checkpoints must be cached on load", 1, checkpointRefreshes)
+    }
+
+    /**
+     * The duties document is needed by the acknowledgement gate, which is the last step of a
+     * capture and may well happen with no signal. If it is not cached while the app is online, a
+     * guard can be left unable to submit an attendance they have already taken.
+     */
+    @Test
+    fun `refresh warms the duties cache so the acknowledgement gate works offline later`() = runTest {
+        viewModel()
+
+        assertEquals("duties must be cached on load", 1, dutyRefreshes)
     }
 
     @Test

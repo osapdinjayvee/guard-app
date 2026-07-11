@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appetiser.guardapp.core.network.ApiError
 import com.appetiser.guardapp.core.network.ApiResult
+import com.appetiser.guardapp.core.security.AppLock
 import com.appetiser.guardapp.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ data class LoginUiState(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val auth: AuthRepository,
+    private val appLock: AppLock,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -44,6 +46,8 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, error = null) }
             val result = auth.login(state.username, state.password)
+            // The password itself is the authentication; do not immediately demand biometrics.
+            if (result is ApiResult.Success) appLock.unlock()
             _uiState.update {
                 it.copy(
                     isSubmitting = false,

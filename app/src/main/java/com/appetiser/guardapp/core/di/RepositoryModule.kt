@@ -3,6 +3,8 @@ package com.appetiser.guardapp.core.di
 import com.appetiser.guardapp.core.connectivity.ConnectivityNetworkMonitor
 import com.appetiser.guardapp.core.connectivity.NetworkMonitor
 import com.appetiser.guardapp.core.location.FusedLocationProvider
+import com.appetiser.guardapp.core.security.AppLock
+import com.appetiser.guardapp.core.security.AppLockManager
 import com.appetiser.guardapp.core.location.LocationProvider
 import com.appetiser.guardapp.core.sync.AttendanceUploader
 import com.appetiser.guardapp.core.sync.DefaultAttendanceUploader
@@ -80,4 +82,8 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindAttendanceUploader(impl: DefaultAttendanceUploader): AttendanceUploader
+
+    @Binds
+    @Singleton
+    abstract fun bindAppLock(impl: AppLockManager): AppLock
 }

@@ -25,6 +25,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
+import retrofit2.Response
 import java.io.IOException
 
 class CheckpointRepositoryTest {
@@ -36,8 +39,11 @@ class CheckpointRepositoryTest {
             checkpoints.forEach { byId[it.id] = it }
             rows.value = byId.values.toList()
         }
+        // Mirrors the real query: code or slug, case-insensitively.
         override suspend fun findByCode(code: String): CheckpointEntity? =
-            rows.value.firstOrNull { it.code == code }
+            rows.value.firstOrNull {
+                it.code.equals(code, ignoreCase = true) || it.slug.equals(code, ignoreCase = true)
+            }
         override fun observeActive(): Flow<List<CheckpointEntity>> =
             rows.map { list -> list.filter { it.status == "ACTIVE" } }
         override suspend fun count(): Int = rows.value.size
@@ -75,11 +81,69 @@ class CheckpointRepositoryTest {
         assertTrue("$resolution", resolution is CheckpointResolution.Disabled)
     }
 
+    /**
+     * The sticker on the wall is a physical object. It may carry the slug rather than the code, and
+     * `=` in SQLite is case-sensitive — a perfectly valid `clinic` must not miss a stored `CLINIC`
+     * and be reported to the guard as a code that does not exist.
+     */
     @Test
-    fun `an unknown code resolves as Unknown`() = runTest {
-        val resolution = repo(FakeGuardApi()).resolve("NOT-A-CODE")
+    fun `a scanned code matches on case and on the slug`() = runTest {
+        dao.upsertAll(listOf(dto(2, "CLINIC", "ACTIVE").copy(slug = "clinic").toEntity(0)))
+        val repository = repo(FakeGuardApi())
 
-        assertEquals(CheckpointResolution.Unknown("NOT-A-CODE"), resolution)
+        assertTrue(repository.resolve("CLINIC") is CheckpointResolution.Resolved)
+        assertTrue(repository.resolve("clinic") is CheckpointResolution.Resolved)
+        assertTrue("whitespace off a QR payload", repository.resolve(" CLINIC\n") is CheckpointResolution.Resolved)
+    }
+
+    /**
+     * A cache miss is a question, not an answer: the checkpoint may have been created since the
+     * last refresh, or this device may never have refreshed at all. Ask the server, and cache what
+     * it says so the next scan works offline.
+     */
+    @Test
+    fun `a code missing from the cache is looked up on the server and cached`() = runTest {
+        val repository = repo(object : FakeGuardApi() {
+            override suspend fun checkpoint(code: String) = Envelope(dto(9, "CLINIC", "ACTIVE"))
+        })
+
+        val resolution = repository.resolve("CLINIC")
+
+        assertTrue("$resolution", resolution is CheckpointResolution.Resolved)
+        assertEquals("the answer is cached for the next, offline, scan", 1, dao.count())
+    }
+
+    /** Only the server, having actually looked, may call a code invalid. */
+    @Test
+    fun `a code the server has never heard of resolves as Unknown`() = runTest {
+        val repository = repo(object : FakeGuardApi() {
+            override suspend fun checkpoint(code: String): Envelope<CheckpointDto> =
+                throw HttpException(Response.error<CheckpointDto>(404, "".toResponseBody()))
+        })
+
+        assertEquals(CheckpointResolution.Unknown("NOT-A-CODE"), repository.resolve("NOT-A-CODE"))
+    }
+
+    /**
+     * The bug this whole path exists to prevent.
+     *
+     * An empty cache and a dead network is the state of every freshly-installed phone in a
+     * basement. Telling that guard "this is not a checkpoint" is false, and it is the falsehood
+     * that sends them looking for another door — or convinces them the sticker is broken. We could
+     * not check, and we must say exactly that.
+     */
+    @Test
+    fun `a cache miss we cannot verify is Unverifiable, never Unknown`() = runTest {
+        val repository = repo(object : FakeGuardApi() {
+            override suspend fun checkpoint(code: String): Envelope<CheckpointDto> =
+                throw IOException("no route to host")
+        })
+
+        val resolution = repository.resolve("CLINIC")
+
+        assertEquals(CheckpointResolution.Unverifiable("CLINIC"), resolution)
+        assertTrue("an offline miss must never be reported as an invalid code",
+            resolution !is CheckpointResolution.Unknown)
     }
 
     @Test

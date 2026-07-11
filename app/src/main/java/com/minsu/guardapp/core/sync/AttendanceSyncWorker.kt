@@ -86,6 +86,7 @@ class AttendanceSyncWorker @AssistedInject constructor(
         is ApiError.Server -> "server $status: $message"
         is ApiError.Network -> "network: ${cause.message}"
         ApiError.PayloadTooLarge -> "selfie too large"
+        ApiError.NotFound -> "the server has no record of this checkpoint"
         ApiError.Unauthorized -> "unauthorized"
         ApiError.InvalidCredentials -> "invalid credentials"
         is ApiError.Unexpected -> cause.message ?: "unexpected error"

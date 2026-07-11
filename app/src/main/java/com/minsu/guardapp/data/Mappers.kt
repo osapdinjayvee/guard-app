@@ -21,6 +21,7 @@ private const val STATUS_ACTIVE = "ACTIVE"
 fun CheckpointDto.toEntity(now: Long) = CheckpointEntity(
     id = id,
     code = code,
+    slug = slug,
     name = name,
     description = description,
     latitude = latitude,

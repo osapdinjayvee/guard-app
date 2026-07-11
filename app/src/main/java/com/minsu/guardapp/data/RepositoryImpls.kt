@@ -6,7 +6,9 @@ import com.minsu.guardapp.core.database.AttendanceEntity
 import com.minsu.guardapp.core.database.SyncStatus
 import com.minsu.guardapp.core.database.AttendanceType as EntityAttendanceType
 import com.minsu.guardapp.core.database.CheckpointDao
+import com.minsu.guardapp.core.database.CheckpointEntity
 import com.minsu.guardapp.core.database.DutyDao
+import com.minsu.guardapp.core.network.ApiError
 import com.minsu.guardapp.core.network.ApiErrorMapper
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
@@ -39,12 +41,43 @@ class DefaultCheckpointRepository @Inject constructor(
 ) : CheckpointRepository {
 
     /**
-     * Reads the local cache only. Requiring a round trip here would break offline scanning —
-     * a guard at a basement checkpoint has no signal, and the server re-validates at sync time.
+     * Cache first, then the server — never the other way round.
+     *
+     * The cache answers instantly and works in a basement, which is where the scanning happens, so
+     * a round trip is never on the critical path of a checkpoint the guard has scanned before.
+     *
+     * But a cache *miss* is not an answer. It means only that this device has not been told about
+     * this checkpoint: a cold install, a checkpoint an admin added this morning, a refresh that
+     * failed. Reporting that as "not a checkpoint in this system" is a lie, and an expensive one —
+     * it sends a guard looking for another door, or convinces them the sticker on the wall is
+     * broken. So on a miss the server is asked, and only a 404 from the server — the one authority
+     * that can actually know — licenses that sentence. Anything else is [Unverifiable]: we could
+     * not check, and we say so.
      */
     override suspend fun resolve(code: String): CheckpointResolution {
-        val entity = dao.findByCode(code) ?: return CheckpointResolution.Unknown(code)
-        val checkpoint = entity.toDomain()
+        val scanned = code.trim()
+        if (scanned.isEmpty()) return CheckpointResolution.Unknown(code)
+
+        dao.findByCode(scanned)?.let { return it.toResolution() }
+
+        return when (val result = errors.call { api.checkpoint(scanned).data }) {
+            is ApiResult.Success -> {
+                // Cache it on the way past: the next guard to scan this checkpoint, offline,
+                // resolves it from here.
+                val entity = result.value.toEntity(clock.nowMillis())
+                dao.upsertAll(listOf(entity))
+                entity.toResolution()
+            }
+
+            is ApiResult.Failure -> when (result.error) {
+                ApiError.NotFound -> CheckpointResolution.Unknown(scanned)
+                else -> CheckpointResolution.Unverifiable(scanned)
+            }
+        }
+    }
+
+    private fun CheckpointEntity.toResolution(): CheckpointResolution {
+        val checkpoint = toDomain()
         return if (checkpoint.isActive) {
             CheckpointResolution.Resolved(checkpoint)
         } else {

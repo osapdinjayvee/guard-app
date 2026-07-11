@@ -18,6 +18,12 @@ data class CheckpointEntity(
     @PrimaryKey val id: Long,
     /** The value encoded in the QR code. */
     val code: String,
+    /**
+     * The server's URL-safe form of the name. Cached only so that a scan resolves against it too:
+     * stickers printed before the QR payload was settled carry the slug rather than the code, and
+     * they are on walls.
+     */
+    val slug: String?,
     val name: String,
     val description: String?,
     val latitude: Double?,

@@ -12,6 +12,23 @@ val appVersion = Properties().apply {
     rootProject.file("version.properties").inputStream().use(::load)
 }
 
+/**
+ * Release signing credentials, kept out of the repository.
+ *
+ * Create `keystore.properties` at the project root (it is gitignored) with:
+ *
+ *     storeFile=/absolute/path/to/guardapp-release.jks
+ *     storePassword=...
+ *     keyAlias=guardapp
+ *     keyPassword=...
+ *
+ * Absent, the release build still assembles — it is simply unsigned, which is what CI and a
+ * `-PdryRun` want. It cannot be installed on a device until it is signed.
+ */
+val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.exists() }?.let {
+    Properties().apply { it.inputStream().use(::load) }
+}
+
 android {
     namespace = "com.minsu.guardapp"
     compileSdk {
@@ -26,6 +43,19 @@ android {
         versionName = appVersion.getProperty("versionName")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        // Only registered when keystore.properties is present, so a clone without the credentials
+        // still builds rather than failing at configuration time.
+        keystoreProperties?.let { props ->
+            create("release") {
+                storeFile = file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -49,12 +79,19 @@ android {
             buildConfigField("boolean", "USE_MOCK_API", "false")
         }
         release {
-            isMinifyEnabled = false
+            // R8: shrink, optimise, obfuscate. See proguard-rules.pro — several of this app's own
+            // names are load-bearing at runtime (persisted enum constants, reflectively-located
+            // Moshi adapters, the worker class name in WorkManager's database) and R8 would rename
+            // them silently.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
             buildConfigField("String", "API_BASE_URL", "\"https://guard.minsu.edu.ph/api/\"")
+
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {
@@ -64,6 +101,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // MigrationTestHelper reads the exported schemas at runtime, from the test APK's assets — so
+    // the checked-in JSON has to be packaged into it. Without this, a migration test cannot run at
+    // all, which on a database holding unsynced attendance is not a gap worth having.
+    sourceSets.getByName("androidTest") {
+        assets.srcDirs("$projectDir/schemas")
     }
 }
 

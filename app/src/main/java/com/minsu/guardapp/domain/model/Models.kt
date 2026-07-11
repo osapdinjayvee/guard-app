@@ -21,8 +21,22 @@ data class Checkpoint(
  */
 sealed interface CheckpointResolution {
     data class Resolved(val checkpoint: Checkpoint) : CheckpointResolution
+
+    /** A retired checkpoint. Named apart from [Unknown] so the guard knows to try another door. */
     data class Disabled(val checkpoint: Checkpoint) : CheckpointResolution
+
+    /** The server looked and there is no such checkpoint. A wrong sticker, or a stale one. */
     data class Unknown(val code: String) : CheckpointResolution
+
+    /**
+     * Not in the cache, and the server could not be reached to ask.
+     *
+     * This is emphatically not [Unknown]. Saying "this is not a checkpoint" when the truth is "I
+     * could not check" sends a guard hunting for another door, or makes them think the QR on the
+     * wall is broken, when in fact the only problem is that their phone has no signal and has never
+     * downloaded the checkpoint list. The two must never be worded the same way.
+     */
+    data class Unverifiable(val code: String) : CheckpointResolution
 }
 
 data class Duty(

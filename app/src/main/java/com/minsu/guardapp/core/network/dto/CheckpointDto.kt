@@ -14,6 +14,8 @@ import com.squareup.moshi.JsonClass
 data class CheckpointDto(
     @Json(name = "id") val id: Long,
     @Json(name = "code") val code: String,
+    /** Cached alongside the code, because a QR sticker may carry either. */
+    @Json(name = "slug") val slug: String? = null,
     @Json(name = "name") val name: String,
     @Json(name = "description") val description: String? = null,
     @Json(name = "latitude") val latitude: Double? = null,

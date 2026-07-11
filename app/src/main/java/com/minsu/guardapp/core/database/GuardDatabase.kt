@@ -16,7 +16,7 @@ import androidx.room.TypeConverters
         CheckpointEntity::class,
         DutyEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(SyncStatusConverter::class, AttendanceTypeConverter::class)

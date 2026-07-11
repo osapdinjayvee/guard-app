@@ -48,6 +48,7 @@ class ApiErrorMapper @Inject constructor(moshi: Moshi) {
                 code = code.ifEmpty { "conflict" },
                 message = message.ifEmpty { "The server refused this record." },
             )
+            404 -> ApiError.NotFound
             413 -> ApiError.PayloadTooLarge
             422 -> ApiError.Validation(
                 message = message.ifEmpty { "The request failed validation." },

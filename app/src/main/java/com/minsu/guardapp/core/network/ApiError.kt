@@ -16,6 +16,14 @@ sealed interface ApiError {
     data object InvalidCredentials : ApiError
 
     /**
+     * The server looked and there is no such thing. Distinct from every other failure, which mean
+     * only that we *could not look* — telling a guard their checkpoint does not exist when the
+     * truth is that the network is down is a lie, and it is the lie that sends them looking for a
+     * different door.
+     */
+    data object NotFound : ApiError
+
+    /**
      * The server permanently refuses this record: a disabled or unknown checkpoint, or an
      * out-of-sequence attendance type. Retrying will never succeed, so the record moves to
      * `REJECTED` and is surfaced to the guard rather than retried or deleted.
@@ -42,7 +50,7 @@ val ApiError.isRetriable: Boolean
         // retried once the guard re-authenticates. It must never be dropped.
         ApiError.Unauthorized -> false
         is ApiError.Rejected, is ApiError.Validation, ApiError.PayloadTooLarge,
-        ApiError.InvalidCredentials, is ApiError.Unexpected,
+        ApiError.InvalidCredentials, ApiError.NotFound, is ApiError.Unexpected,
         -> false
     }
 

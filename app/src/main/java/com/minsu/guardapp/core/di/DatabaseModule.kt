@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.minsu.guardapp.core.database.AttendanceDao
 import com.minsu.guardapp.core.database.CheckpointDao
 import com.minsu.guardapp.core.database.DutyDao
+import com.minsu.guardapp.core.database.GUARD_MIGRATIONS
 import com.minsu.guardapp.core.database.GuardDatabase
 import dagger.Module
 import dagger.Provides
@@ -23,6 +24,7 @@ object DatabaseModule {
         Room.databaseBuilder(context, GuardDatabase::class.java, GuardDatabase.NAME)
             // No fallbackToDestructiveMigration: this database holds unsynced attendance
             // records, and dropping it on a schema change would destroy captured evidence.
+            .addMigrations(*GUARD_MIGRATIONS)
             .build()
 
     @Provides

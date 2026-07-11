@@ -26,6 +26,7 @@ open class FakeGuardApi : GuardApi {
     override suspend fun logout(): Unit = error("logout not stubbed")
     override suspend fun profile(): Envelope<ProfileDto> = error("profile not stubbed")
     override suspend fun checkpoints(): Envelope<List<CheckpointDto>> = error("checkpoints not stubbed")
+    override suspend fun checkpoint(code: String): Envelope<CheckpointDto> = error("checkpoint not stubbed")
     override suspend fun duties(): Envelope<DutyDto> = error("duties not stubbed")
     override suspend fun announcements(): Envelope<List<AnnouncementDto>> = error("announcements not stubbed")
     override suspend fun settings(): Envelope<MobileSettingsDto> = error("settings not stubbed")

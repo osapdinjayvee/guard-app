@@ -16,6 +16,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Part
 import retrofit2.http.Query
 
@@ -62,6 +63,14 @@ interface GuardApi {
     /** Not paginated: the client caches the whole set so a QR code resolves offline. */
     @GET("checkpoints")
     suspend fun checkpoints(): Envelope<List<CheckpointDto>>
+
+    /**
+     * Resolves one scanned code when the local cache misses — a checkpoint added since the last
+     * refresh, or a cache that has never been warmed. Matches the code or the slug. A 404 here is
+     * the only thing that licenses the app to tell a guard their code is not a checkpoint.
+     */
+    @GET("checkpoints/{code}")
+    suspend fun checkpoint(@Path("code") code: String): Envelope<CheckpointDto>
 
     @GET("duties")
     suspend fun duties(): Envelope<DutyDto>

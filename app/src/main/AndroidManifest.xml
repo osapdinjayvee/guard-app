@@ -15,9 +15,26 @@
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
+    <!--
+      Backup is off.
+
+      This app's data is evidence: photographs of guards' faces, the GPS coordinates where each was
+      taken, the timestamps, and a live session token for the attendance API. Android's Auto Backup
+      is on by default, and it copies exactly that to the user's Google Drive and into
+      device-to-device transfers — off MinSU's premises and outside its control, in a personal
+      account the university does not administer.
+
+      This was not theoretical: reinstalling the app during release testing silently restored a
+      previous session, still signed in, from a cloud backup nobody had asked for.
+
+      A guard who loses their phone should lose access to the app, not hand a stranger the last
+      month of their movements. There is nothing here worth restoring — checkpoints and duties
+      re-download in seconds, and an unsynced attendance is meant to be uploaded, not resurrected on
+      a different handset.
+    -->
     <application
         android:name=".GuardApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"

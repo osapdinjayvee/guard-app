@@ -60,6 +60,27 @@
 -keep class * extends androidx.work.ListenableWorker { *; }
 
 # ---------------------------------------------------------------------------------------------
+# ML Kit — the QR scanner, which is to say the product.
+#
+# Found by running the minified build, not by reading it. ML Kit registers its components through
+# Firebase's ComponentDiscovery: it reads registrar class *names* out of the merged manifest and
+# instantiates each one via a no-argument constructor it finds by reflection. R8 sees a constructor
+# nobody calls and removes it, and discovery then fails with
+#
+#     NoSuchMethodException: com.google.mlkit.vision.barcode.internal.BarcodeRegistrar.<init> []
+#
+# which is logged at WARN and swallowed. Nothing crashes. The barcode scanner simply never works,
+# in release builds only — the one configuration nobody runs during development.
+-keep class com.google.mlkit.** { *; }
+-keep class * implements com.google.firebase.components.ComponentRegistrar {
+    <init>();
+}
+-keepclassmembers class * implements com.google.firebase.components.ComponentRegistrar {
+    <init>();
+}
+-dontwarn com.google.mlkit.**
+
+# ---------------------------------------------------------------------------------------------
 # Room reaches entities from generated code, but matches @TypeConverter methods by signature. Keep
 # them, so the enum converters above are not shrunk away as unused.
 -keepclassmembers class * {

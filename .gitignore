@@ -16,3 +16,22 @@ local.properties
 
 # Per-developer Claude Code overrides; the shared config is .claude/settings.json
 .claude/settings.local.json
+
+# Release signing. The keystore is the app's identity: whoever holds it can ship an update that
+# every installed device will accept as genuine, and Play will refuse a build signed by anything
+# else. It is never committed, and it is backed up somewhere that is not this repository.
+/keystore.properties
+*.jks
+*.keystore
+
+# Android Studio project state, and per-machine runtime scratch. Neither is shared.
+/.idea/
+/.kotlin/
+
+# ruflo runtime state: daemon pids, metrics, generated config. Machine-local, and noisy.
+/.claude-flow/daemon-state.json
+/.claude-flow/daemon.pid
+/.claude-flow/harness-active-policy.json
+/.claude-flow/metrics/
+/.claude/.proven-config-version
+/.claude/proven-config.json

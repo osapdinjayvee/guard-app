@@ -4,6 +4,8 @@ import com.appetiser.guardapp.core.connectivity.ConnectivityNetworkMonitor
 import com.appetiser.guardapp.core.connectivity.NetworkMonitor
 import com.appetiser.guardapp.core.location.FusedLocationProvider
 import com.appetiser.guardapp.core.location.LocationProvider
+import com.appetiser.guardapp.core.sync.AttendanceUploader
+import com.appetiser.guardapp.core.sync.DefaultAttendanceUploader
 import com.appetiser.guardapp.core.sync.SyncScheduler
 import com.appetiser.guardapp.core.sync.WorkManagerSyncScheduler
 import com.appetiser.guardapp.data.DataStoreSettingsCache
@@ -75,4 +77,7 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSyncScheduler(impl: WorkManagerSyncScheduler): SyncScheduler
+
+    @Binds
+    abstract fun bindAttendanceUploader(impl: DefaultAttendanceUploader): AttendanceUploader
 }

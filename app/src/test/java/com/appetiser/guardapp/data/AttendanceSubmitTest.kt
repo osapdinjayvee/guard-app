@@ -33,6 +33,7 @@ class AttendanceSubmitTest {
         override suspend fun markSynced(id: String, serverId: Long, now: Long) = Unit
         override suspend fun markFailed(id: String, error: String, nextAttemptAt: Long, now: Long) = Unit
         override suspend fun markRejected(id: String, error: String, now: Long) = Unit
+        override suspend fun releaseClaim(id: String, now: Long) = Unit
         override suspend fun count() = inserted.size
     }
 

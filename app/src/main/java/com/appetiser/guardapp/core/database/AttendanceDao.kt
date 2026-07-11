@@ -113,6 +113,19 @@ interface AttendanceDao {
     )
     suspend fun markRejected(id: String, error: String, now: Long)
 
+    /**
+     * Returns a claimed record to PENDING without touching retryCount or backoff. Used when a
+     * 401 aborts sync: the record owes nothing, it just has to wait for re-authentication.
+     */
+    @Query(
+        """
+        UPDATE attendance
+        SET syncStatus = 'PENDING', claimedAt = NULL, updatedAt = :now
+        WHERE id = :id AND syncStatus = 'SYNCING'
+        """
+    )
+    suspend fun releaseClaim(id: String, now: Long)
+
     @Query("SELECT COUNT(*) FROM attendance")
     suspend fun count(): Int
 }

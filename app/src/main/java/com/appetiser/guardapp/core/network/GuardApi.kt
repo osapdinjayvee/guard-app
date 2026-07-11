@@ -10,9 +10,13 @@ import com.appetiser.guardapp.core.network.dto.LoginResponse
 import com.appetiser.guardapp.core.network.dto.MobileSettingsDto
 import com.appetiser.guardapp.core.network.dto.PagedEnvelope
 import com.appetiser.guardapp.core.network.dto.ProfileDto
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Query
 
 /**
@@ -29,6 +33,28 @@ interface GuardApi {
 
     @POST("logout")
     suspend fun logout()
+
+    /**
+     * Submit one attendance record. Multipart (decision 2): base64 would inflate the payload by
+     * a third and hold the whole image in memory as a string. Idempotent on client_uuid — the
+     * server returns 200 with the existing record for a repeat, 201 for a first submit
+     * (decision 1). Both are success.
+     */
+    @Multipart
+    @POST("attendance")
+    suspend fun submitAttendance(
+        @Part("client_uuid") clientUuid: RequestBody,
+        @Part("qr_checkpoint_id") checkpointId: RequestBody,
+        @Part("attendance_type") attendanceType: RequestBody,
+        @Part("captured_at") capturedAt: RequestBody,
+        @Part("duties_acknowledged") dutiesAcknowledged: RequestBody,
+        @Part("latitude") latitude: RequestBody?,
+        @Part("longitude") longitude: RequestBody?,
+        @Part("accuracy") accuracy: RequestBody?,
+        @Part("duties_version_id") dutiesVersionId: RequestBody?,
+        @Part("device_id") deviceId: RequestBody?,
+        @Part selfie: MultipartBody.Part,
+    ): Envelope<AttendanceDto>
 
     @GET("profile")
     suspend fun profile(): Envelope<ProfileDto>

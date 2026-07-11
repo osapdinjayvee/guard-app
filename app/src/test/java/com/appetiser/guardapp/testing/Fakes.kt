@@ -31,6 +31,19 @@ open class FakeGuardApi : GuardApi {
     override suspend fun settings(): Envelope<MobileSettingsDto> = error("settings not stubbed")
     override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> =
         error("history not stubbed")
+    override suspend fun submitAttendance(
+        clientUuid: okhttp3.RequestBody,
+        checkpointId: okhttp3.RequestBody,
+        attendanceType: okhttp3.RequestBody,
+        capturedAt: okhttp3.RequestBody,
+        dutiesAcknowledged: okhttp3.RequestBody,
+        latitude: okhttp3.RequestBody?,
+        longitude: okhttp3.RequestBody?,
+        accuracy: okhttp3.RequestBody?,
+        dutiesVersionId: okhttp3.RequestBody?,
+        deviceId: okhttp3.RequestBody?,
+        selfie: okhttp3.MultipartBody.Part,
+    ): Envelope<AttendanceDto> = error("submitAttendance not stubbed")
 }
 
 class FakeTokenStore(initial: String? = null) : TokenStore {

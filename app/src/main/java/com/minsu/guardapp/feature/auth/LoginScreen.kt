@@ -1,5 +1,6 @@
 package com.minsu.guardapp.feature.auth
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -37,6 +39,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.minsu.guardapp.R
 import com.minsu.guardapp.ui.components.BrandPill
 import com.minsu.guardapp.ui.theme.GuardAppTheme
 
@@ -69,7 +72,18 @@ fun LoginScreen(
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Spacer(Modifier.height(64.dp))
+        Spacer(Modifier.height(48.dp))
+
+        // The university's own seal, on the one screen that has to say who this app belongs to.
+        // A guard installing an attendance app that will hold their photograph and their location
+        // should be able to see, before they type a password, that it is MinSU's.
+        Image(
+            painter = painterResource(R.drawable.logo_minsu_seal),
+            contentDescription = "Mindoro State University",
+            modifier = Modifier.size(96.dp),
+        )
+
+        Spacer(Modifier.height(20.dp))
 
         Text(
             "Welcome back",

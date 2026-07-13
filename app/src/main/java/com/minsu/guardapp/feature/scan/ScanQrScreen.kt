@@ -301,13 +301,18 @@ private fun TypeChoice(
         // Only what the roster permits. A stationed guard is never shown a patrol visit — they are
         // at one post, and there is nothing to visit. Offering a button the server will reject is a
         // trap, not a choice.
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        //
+        // Stacked, not in a row. Sharing the width between three buttons left "Checkpoint" too
+        // narrow to fit: it wrapped to two lines inside a fixed-height button and came out taller
+        // and misshapen next to the others. Full-width rows fit any label at any font scale, and a
+        // gloved thumb in the dark wants the bigger target anyway.
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             allowedTypes.forEachIndexed { index, type ->
                 TypeButton(
                     label = type.label(),
                     filled = index == 0,
                     onClick = { onChoose(type) },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -329,14 +334,19 @@ private fun TypeButton(label: String, filled: Boolean, onClick: () -> Unit, modi
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ),
             modifier = modifier.height(54.dp),
-        ) { Text(label, fontWeight = FontWeight.Bold) }
+        ) { Text(label, fontWeight = FontWeight.Bold, maxLines = 1) }
     } else {
         OutlinedButton(
             onClick = onClick,
             shape = RoundedCornerShape(24.dp),
             modifier = modifier.height(54.dp),
         ) {
-            Text(label, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(
+                label,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

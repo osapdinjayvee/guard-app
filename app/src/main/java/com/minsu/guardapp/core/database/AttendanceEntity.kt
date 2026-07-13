@@ -73,6 +73,9 @@ data class AttendanceEntity(
 enum class AttendanceType {
     TIME_IN,
     TIME_OUT,
+
+    /** A patrol visit. Only a roving guard records one. */
+    CHECKPOINT,
     ;
 
     /**

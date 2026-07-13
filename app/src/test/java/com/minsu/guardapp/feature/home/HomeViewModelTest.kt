@@ -15,7 +15,9 @@ import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
+import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.repository.ProfileRepository
+import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,6 +75,7 @@ class HomeViewModelTest {
     }
     private val checkpointRepo = object : CheckpointRepository {
         override suspend fun resolve(code: String): CheckpointResolution = CheckpointResolution.Unknown(code)
+        override suspend fun byId(id: Long): Checkpoint? = null
         override fun observeActive(): Flow<List<Checkpoint>> = MutableStateFlow(emptyList())
         override suspend fun refresh(): ApiResult<Unit> {
             checkpointRefreshes++
@@ -83,6 +86,17 @@ class HomeViewModelTest {
         override suspend fun activeDuty(): Duty? = null
         override suspend fun refresh(): ApiResult<Unit> {
             dutyRefreshes++
+            return ApiResult.Success(Unit)
+        }
+    }
+    private var scheduleRefreshes = 0
+    private val scheduleRepo = object : ScheduleRepository {
+        override fun observeToday(): Flow<DutyAssignment?> = MutableStateFlow(null)
+        override suspend fun today(): DutyAssignment? = null
+        override val isLinked: Flow<Boolean> = MutableStateFlow(true)
+        override suspend fun postTimedInAtToday(): Long? = null
+        override suspend fun refresh(): ApiResult<Unit> {
+            scheduleRefreshes++
             return ApiResult.Success(Unit)
         }
     }
@@ -97,7 +111,7 @@ class HomeViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel() =
-        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, monitor)
+        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, monitor)
 
     @Test
     fun `streams local state without waiting on the network`() = runTest {
@@ -171,7 +185,7 @@ class HomeViewModelTest {
             override suspend fun clear() = Unit
         }
 
-        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, monitor)
+        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, monitor)
 
         assertEquals("Juan Dela Cruz", vm.uiState.value.profile?.name)
         assertFalse(vm.uiState.value.isRefreshing)

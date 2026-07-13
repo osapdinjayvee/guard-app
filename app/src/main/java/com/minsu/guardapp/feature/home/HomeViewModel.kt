@@ -11,6 +11,7 @@ import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
+import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +40,7 @@ class HomeViewModel @Inject constructor(
     private val announcements: AnnouncementRepository,
     private val checkpoints: CheckpointRepository,
     private val duties: DutyRepository,
+    private val schedule: ScheduleRepository,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
@@ -92,6 +94,9 @@ class HomeViewModel @Inject constructor(
             settings.refresh()
             announcements.refresh()
             checkpoints.refresh()
+            // The roster gates the scanner, and the scanner is used where there is no signal. It is
+            // cached here, on the screen that is reliably online.
+            schedule.refresh()
             // Cached here, on the one screen that is reliably online, because the place it is
             // *needed* is the acknowledgement gate at the end of a capture — which may well be
             // happening in a basement with no signal. Fetching it there would leave the guard

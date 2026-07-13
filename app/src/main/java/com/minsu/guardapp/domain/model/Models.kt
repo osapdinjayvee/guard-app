@@ -89,7 +89,53 @@ data class AppSettings(
     val maintenanceMessage: String? = null,
 )
 
-enum class AttendanceType { TIME_IN, TIME_OUT }
+/**
+ * What a scan records.
+ *
+ * CHECKPOINT is a patrol visit, and only a roving guard makes one — a stationed guard is at a single
+ * post for the whole shift, so there is nothing for them to visit.
+ */
+enum class AttendanceType { TIME_IN, TIME_OUT, CHECKPOINT }
+
+/** SG or RG. What the guard is rostered to do on a given day. */
+enum class DutyType {
+    /** One post for the shift: Time In and Time Out, at the checkpoint they scanned in at. */
+    STATIONED,
+
+    /** A round: Time In to start, a visit at each checkpoint, Time Out to end. */
+    ROVING,
+    ;
+
+    companion object {
+        /** The server speaks in codes. Anything unrecognised is not guessed at. */
+        fun fromCode(code: String?): DutyType? = when (code?.uppercase()) {
+            "SG" -> STATIONED
+            "RG" -> ROVING
+            else -> null
+        }
+    }
+}
+
+/** One day on the roster. */
+data class DutyAssignment(
+    val date: String,
+    val dutyType: DutyType,
+    val dutyName: String?,
+    val startsAt: String?,
+    val endsAt: String?,
+    val totalHours: Float,
+) {
+    /** The types this guard may record today. A stationed guard never sees a patrol visit. */
+    val allowedTypes: List<AttendanceType>
+        get() = when (dutyType) {
+            DutyType.STATIONED -> listOf(AttendanceType.TIME_IN, AttendanceType.TIME_OUT)
+            DutyType.ROVING -> listOf(
+                AttendanceType.TIME_IN,
+                AttendanceType.CHECKPOINT,
+                AttendanceType.TIME_OUT,
+            )
+        }
+}
 
 enum class SyncState { PENDING, SYNCING, SYNCED, FAILED, REJECTED }
 

@@ -10,6 +10,7 @@ import com.minsu.guardapp.core.network.dto.LoginResponse
 import com.minsu.guardapp.core.network.dto.MobileSettingsDto
 import com.minsu.guardapp.core.network.dto.PagedEnvelope
 import com.minsu.guardapp.core.network.dto.ProfileDto
+import com.minsu.guardapp.core.network.dto.ScheduleDto
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Body
@@ -71,6 +72,13 @@ interface GuardApi {
      */
     @GET("checkpoints/{code}")
     suspend fun checkpoint(@Path("code") code: String): Envelope<CheckpointDto>
+
+    /**
+     * The guard's own duty roster. Drives the scanner: a stationed guard is offered Time In and Time
+     * Out alone and is refused a second checkpoint; a roving guard may record a visit anywhere.
+     */
+    @GET("schedule")
+    suspend fun schedule(): Envelope<ScheduleDto>
 
     @GET("duties")
     suspend fun duties(): Envelope<DutyDto>

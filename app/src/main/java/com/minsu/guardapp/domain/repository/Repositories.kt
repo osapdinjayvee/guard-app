@@ -8,6 +8,7 @@ import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.Duty
+import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.GuardProfile
 import kotlinx.coroutines.flow.Flow
 
@@ -19,6 +20,9 @@ import kotlinx.coroutines.flow.Flow
 interface CheckpointRepository {
     /** Resolves a scanned QR value against the local cache. Works offline. */
     suspend fun resolve(code: String): CheckpointResolution
+
+    /** One cached checkpoint by id. Names the post a stationed guard timed in at. */
+    suspend fun byId(id: Long): Checkpoint?
 
     fun observeActive(): Flow<List<Checkpoint>>
 
@@ -98,4 +102,30 @@ interface AuthRepository {
 
     /** Clears the local session. Never touches the attendance queue. */
     suspend fun logout()
+}
+
+/**
+ * The guard's duty roster.
+ *
+ * Cached, and read from the cache, because the scanner needs to know whether this guard is stationed
+ * or roving *before* it can offer them the right buttons — and it needs to know that in a basement.
+ */
+interface ScheduleRepository {
+    /** Today's duty. Null on a rest day, or a week the office has not filled in. */
+    fun observeToday(): Flow<DutyAssignment?>
+
+    suspend fun today(): DutyAssignment?
+
+    /** False when nobody has joined this login to a guard on the roster. Not the same as "no shift". */
+    val isLinked: Flow<Boolean>
+
+    /**
+     * The checkpoint this guard timed in at today, if they have.
+     *
+     * A stationed guard's post. Nobody assigns it — the first Time In of the day defines it, and the
+     * shift must end where it began.
+     */
+    suspend fun postTimedInAtToday(): Long?
+
+    suspend fun refresh(): ApiResult<Unit>
 }

@@ -174,6 +174,27 @@ interface AttendanceDao {
     )
     suspend fun releaseClaim(id: String, now: Long)
 
+    /**
+     * Where this guard first timed in on a given day, if they have.
+     *
+     * This is what makes a stationed guard's post knowable without anyone assigning one: the first
+     * Time In of the day *is* the post, and every later record that day must agree with it. Read
+     * from the local database, not the server, so the rule holds in a basement.
+     *
+     * A record that was rejected is deliberately still counted: it happened, the guard was there,
+     * and pretending otherwise would let them quietly re-open the shift somewhere else.
+     */
+    @Query(
+        """
+        SELECT * FROM attendance
+        WHERE attendanceType = 'TIME_IN'
+          AND capturedAt >= :fromMillis AND capturedAt < :toMillis
+        ORDER BY capturedAt ASC
+        LIMIT 1
+        """
+    )
+    suspend fun firstTimeInBetween(fromMillis: Long, toMillis: Long): AttendanceEntity?
+
     @Query("SELECT COUNT(*) FROM attendance")
     suspend fun count(): Int
 }

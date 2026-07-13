@@ -71,6 +71,7 @@ fun AttendanceEntity.toDomain() = AttendanceRecord(
     type = when (attendanceType) {
         EntityAttendanceType.TIME_IN -> AttendanceType.TIME_IN
         EntityAttendanceType.TIME_OUT -> AttendanceType.TIME_OUT
+        EntityAttendanceType.CHECKPOINT -> AttendanceType.CHECKPOINT
     },
     capturedAt = capturedAt,
     selfiePath = selfiePath,

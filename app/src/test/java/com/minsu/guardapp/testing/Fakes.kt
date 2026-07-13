@@ -11,6 +11,7 @@ import com.minsu.guardapp.core.network.dto.LoginResponse
 import com.minsu.guardapp.core.network.dto.MobileSettingsDto
 import com.minsu.guardapp.core.network.dto.PagedEnvelope
 import com.minsu.guardapp.core.network.dto.ProfileDto
+import com.minsu.guardapp.core.network.dto.ScheduleDto
 import com.minsu.guardapp.core.security.TokenStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,7 @@ open class FakeGuardApi : GuardApi {
     override suspend fun checkpoints(): Envelope<List<CheckpointDto>> = error("checkpoints not stubbed")
     override suspend fun checkpoint(code: String): Envelope<CheckpointDto> = error("checkpoint not stubbed")
     override suspend fun duties(): Envelope<DutyDto> = error("duties not stubbed")
+    override suspend fun schedule(): Envelope<ScheduleDto> = error("schedule not stubbed")
     override suspend fun announcements(): Envelope<List<AnnouncementDto>> = error("announcements not stubbed")
     override suspend fun settings(): Envelope<MobileSettingsDto> = error("settings not stubbed")
     override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> =

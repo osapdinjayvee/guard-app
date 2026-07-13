@@ -40,6 +40,11 @@ class AttendanceSubmitTest {
         override suspend fun markFailed(id: String, error: String, nextAttemptAt: Long, now: Long) = Unit
         override suspend fun markRejected(id: String, error: String, now: Long) = Unit
         override suspend fun releaseClaim(id: String, now: Long) = Unit
+        override suspend fun firstTimeInBetween(fromMillis: Long, toMillis: Long): AttendanceEntity? =
+            inserted.firstOrNull {
+                it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.TIME_IN &&
+                    it.capturedAt in fromMillis until toMillis
+            }
         override suspend fun count() = inserted.size
     }
 

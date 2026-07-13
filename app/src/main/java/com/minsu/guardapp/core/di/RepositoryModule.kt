@@ -17,7 +17,10 @@ import com.minsu.guardapp.core.sync.WorkManagerSyncScheduler
 import com.minsu.guardapp.data.DataStoreSettingsCache
 import com.minsu.guardapp.data.DefaultAuthRepository
 import com.minsu.guardapp.data.DefaultAnnouncementRepository
+import com.minsu.guardapp.core.security.DataStoreRosterPreferences
+import com.minsu.guardapp.core.security.RosterPreferences
 import com.minsu.guardapp.data.DefaultAttendanceRepository
+import com.minsu.guardapp.data.DefaultScheduleRepository
 import com.minsu.guardapp.data.DefaultCheckpointRepository
 import com.minsu.guardapp.data.DefaultDutyRepository
 import com.minsu.guardapp.data.DefaultProfileRepository
@@ -29,6 +32,7 @@ import com.minsu.guardapp.domain.repository.AuthRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
+import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.Binds
 import dagger.Module
@@ -98,4 +102,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindOnboardingPreferences(impl: DataStoreOnboardingPreferences): OnboardingPreferences
+
+    @Binds
+    @Singleton
+    abstract fun bindScheduleRepository(impl: DefaultScheduleRepository): ScheduleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRosterPreferences(impl: DataStoreRosterPreferences): RosterPreferences
 }

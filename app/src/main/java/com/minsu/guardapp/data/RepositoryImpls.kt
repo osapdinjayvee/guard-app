@@ -85,6 +85,8 @@ class DefaultCheckpointRepository @Inject constructor(
         }
     }
 
+    override suspend fun byId(id: Long): Checkpoint? = dao.findById(id)?.toDomain()
+
     override fun observeActive(): Flow<List<Checkpoint>> =
         dao.observeActive().map { entities -> entities.map { it.toDomain() } }
 
@@ -191,6 +193,7 @@ class DefaultAttendanceRepository @Inject constructor(
                 attendanceType = when (draft.type) {
                     AttendanceType.TIME_IN -> EntityAttendanceType.TIME_IN
                     AttendanceType.TIME_OUT -> EntityAttendanceType.TIME_OUT
+                    AttendanceType.CHECKPOINT -> EntityAttendanceType.CHECKPOINT
                 },
                 selfiePath = draft.selfiePath,
                 capturedAt = draft.capturedAtMillis,

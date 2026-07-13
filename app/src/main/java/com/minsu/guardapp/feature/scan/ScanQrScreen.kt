@@ -140,6 +140,7 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                     is ScanState.ChoosingType -> TypeChoice(
                         checkpointName = current.checkpoint.name,
                         checkpointCode = current.checkpoint.code,
+                        allowedTypes = current.allowedTypes,
                         onChoose = viewModel::onTypeChosen,
                         onCancel = viewModel::scanAgain,
                     )
@@ -170,6 +171,37 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                             "connection to look it up. Open Home while online to download the " +
                             "checkpoints, then scan again.",
                         colour = SyncPending,
+                        onDismiss = viewModel::scanAgain,
+                    )
+
+                    // A stationed shift ends where it began. Said here, at the wrong door, while the
+                    // guard can still walk to the right one — rather than by a rejection that lands
+                    // after the shift is over.
+                    is ScanState.WrongPost -> Result(
+                        title = "Not your post today",
+                        body = "You timed in at ${current.timedInAt}. A stationed shift ends where " +
+                            "it began, so scan ${current.timedInAt} to time out — not " +
+                            "${current.scanned.code}.",
+                        colour = SyncFailed,
+                        onDismiss = viewModel::scanAgain,
+                    )
+
+                    // A rest day is not an error, and is not worded as one.
+                    ScanState.NotScheduledToday -> Result(
+                        title = "No shift today",
+                        body = "You are not on the duty roster today, so there is no attendance to " +
+                            "record. If that looks wrong, check with the office.",
+                        colour = SyncPending,
+                        onDismiss = viewModel::scanAgain,
+                    )
+
+                    // Not the guard's fault, and not something they can fix by scanning again.
+                    ScanState.NotOnRoster -> Result(
+                        title = "Account not on the roster",
+                        body = "Your login has not been connected to a guard on the duty roster, so " +
+                            "the app cannot tell what you are scheduled for. Ask the office to link " +
+                            "your account.",
+                        colour = SyncFailed,
                         onDismiss = viewModel::scanAgain,
                     )
                 }
@@ -235,6 +267,7 @@ private fun Hint(text: String, busy: Boolean = false) {
 private fun TypeChoice(
     checkpointName: String,
     checkpointCode: String,
+    allowedTypes: List<AttendanceType>,
     onChoose: (AttendanceType) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -264,19 +297,19 @@ private fun TypeChoice(
             }
         }
         Spacer(Modifier.height(16.dp))
+
+        // Only what the roster permits. A stationed guard is never shown a patrol visit — they are
+        // at one post, and there is nothing to visit. Offering a button the server will reject is a
+        // trap, not a choice.
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TypeButton(
-                label = "Time In",
-                filled = true,
-                onClick = { onChoose(AttendanceType.TIME_IN) },
-                modifier = Modifier.weight(1f),
-            )
-            TypeButton(
-                label = "Time Out",
-                filled = false,
-                onClick = { onChoose(AttendanceType.TIME_OUT) },
-                modifier = Modifier.weight(1f),
-            )
+            allowedTypes.forEachIndexed { index, type ->
+                TypeButton(
+                    label = type.label(),
+                    filled = index == 0,
+                    onClick = { onChoose(type) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
@@ -387,4 +420,10 @@ private fun CameraPreview(
             modifier = Modifier.fillMaxSize(),
         )
     }
+}
+
+private fun AttendanceType.label(): String = when (this) {
+    AttendanceType.TIME_IN -> "Time In"
+    AttendanceType.TIME_OUT -> "Time Out"
+    AttendanceType.CHECKPOINT -> "Checkpoint"
 }

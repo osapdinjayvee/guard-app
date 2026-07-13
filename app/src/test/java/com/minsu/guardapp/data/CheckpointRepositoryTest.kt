@@ -46,6 +46,8 @@ class CheckpointRepositoryTest {
             }
         override fun observeActive(): Flow<List<CheckpointEntity>> =
             rows.map { list -> list.filter { it.status == "ACTIVE" } }
+        override suspend fun findById(id: Long): CheckpointEntity? =
+            rows.value.firstOrNull { it.id == id }
         override suspend fun count(): Int = rows.value.size
     }
 

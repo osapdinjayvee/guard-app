@@ -25,4 +25,30 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-val GUARD_MIGRATIONS = arrayOf(MIGRATION_1_2)
+/**
+ * Adds the cached duty roster.
+ *
+ * The scanner has to know whether the guard is stationed or roving before it can offer them the
+ * right buttons, and it has to know that in a basement. Additive: no existing row is touched, so the
+ * unsynced attendance this database exists to protect is not at risk.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `schedule` (
+                `date` TEXT NOT NULL,
+                `dutyType` TEXT NOT NULL,
+                `dutyName` TEXT,
+                `startsAt` TEXT,
+                `endsAt` TEXT,
+                `totalHours` REAL NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`date`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
+val GUARD_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

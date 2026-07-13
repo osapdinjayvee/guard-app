@@ -7,6 +7,7 @@ import com.minsu.guardapp.core.database.CheckpointDao
 import com.minsu.guardapp.core.database.DutyDao
 import com.minsu.guardapp.core.database.GUARD_MIGRATIONS
 import com.minsu.guardapp.core.database.GuardDatabase
+import com.minsu.guardapp.core.database.ScheduleDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -35,4 +36,7 @@ object DatabaseModule {
 
     @Provides
     fun dutyDao(database: GuardDatabase): DutyDao = database.dutyDao()
+
+    @Provides
+    fun scheduleDao(database: GuardDatabase): ScheduleDao = database.scheduleDao()
 }

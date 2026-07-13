@@ -33,6 +33,10 @@ interface CheckpointDao {
     @Query("SELECT * FROM checkpoints WHERE status = 'ACTIVE' ORDER BY name")
     fun observeActive(): Flow<List<CheckpointEntity>>
 
+    /** Used to name the post a stationed guard timed in at, from its id alone. */
+    @Query("SELECT * FROM checkpoints WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): CheckpointEntity?
+
     @Query("SELECT COUNT(*) FROM checkpoints")
     suspend fun count(): Int
 }

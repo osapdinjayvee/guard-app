@@ -2,7 +2,6 @@ package com.minsu.guardapp.feature.reference
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -122,66 +120,54 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = hiltViewModel()) {
     }
 }
 
+/**
+ * One rostered day.
+ *
+ * The two things a guard came here for are *when* — which day, and what hours — so those are what
+ * the row leads with: a calendar-style date block, and the shift hours as the headline. The duty
+ * code and the rule it implies are the supporting detail, not the other way round.
+ */
 @Composable
 private fun DayRow(day: DutyAssignment, isToday: Boolean) {
     GuardCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // The duty code, large. SG and RG are what the roster says and what the guards call
-            // them; spelling it out in full every time would bury the one thing they are scanning for.
-            Surface(
-                shape = CircleShape,
-                color = if (day.dutyType == DutyType.STATIONED) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.primaryContainer
-                },
-            ) {
-                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (day.dutyType == DutyType.STATIONED) "SG" else "RG",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (day.dutyType == DutyType.STATIONED) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
-                    )
-                }
-            }
+            DateBlock(day.date, isToday)
 
             Spacer(Modifier.width(14.dp))
 
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        prettyDate(day.date),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (isToday) {
-                        Spacer(Modifier.width(8.dp))
-                        TodayPill()
-                    }
-                }
+                val from = shiftTime(day.startsAt)
+                val to = shiftTime(day.endsAt)
                 Text(
-                    buildString {
-                        append(day.dutyName ?: day.dutyType.name)
-                        val from = shiftTime(day.startsAt)
-                        val to = shiftTime(day.endsAt)
-                        if (from != null && to != null) append(" · $from–$to")
+                    if (from != null && to != null) "$from – $to" else "Hours not set",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (from != null && to != null) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // SG and RG are what the roster says and what the guards call each other.
+                    DutyBadge(day.dutyType)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        day.dutyName ?: day.dutyType.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+
+            if (isToday) TodayPill()
         }
 
         // What the duty actually means for them, in the terms the scanner will enforce. A guard who
         // reads "Stationed" and then finds the app refusing their second checkpoint has been told
         // nothing useful.
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             when (day.dutyType) {
                 DutyType.STATIONED ->
@@ -191,6 +177,77 @@ private fun DayRow(day: DutyAssignment, isToday: Boolean) {
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The date, sized so it can be found by glancing down the column rather than by reading. */
+@Composable
+private fun DateBlock(iso: String, isToday: Boolean) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (isToday) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+    ) {
+        Column(
+            // Tall enough for all three lines. At 68.dp the month was silently clipped off the
+            // bottom, which is the one line that matters when the roster crosses into August.
+            modifier = Modifier
+                .size(width = 64.dp, height = 84.dp)
+                .padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            val onBlock = if (isToday) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Text(
+                datePart(iso, "EEE").uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = onBlock,
+            )
+            Text(
+                datePart(iso, "d"),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = onBlock,
+            )
+            Text(
+                datePart(iso, "MMM").uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = onBlock,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DutyBadge(type: DutyType) {
+    val stationed = type == DutyType.STATIONED
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (stationed) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        },
+    ) {
+        Text(
+            if (stationed) "SG" else "RG",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (stationed) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }
@@ -233,8 +290,8 @@ private fun Notice(title: String, body: String) {
 private fun todayIso(): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
-/** `2026-07-13` → `Mon, 13 Jul`. Falls back to the raw value rather than showing nothing. */
-private fun prettyDate(iso: String): String = runCatching {
+/** One piece of `2026-07-13` — `EEE` → `Mon`, `d` → `13`, `MMM` → `Jul`. */
+private fun datePart(iso: String, pattern: String): String = runCatching {
     val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(iso)!!
-    SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(parsed)
-}.getOrDefault(iso)
+    SimpleDateFormat(pattern, Locale.getDefault()).format(parsed)
+}.getOrDefault(if (pattern == "d") iso.takeLast(2) else "")

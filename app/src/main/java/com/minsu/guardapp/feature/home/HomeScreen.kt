@@ -95,7 +95,9 @@ fun HomeScreen(
 
         state.maintenanceMessage?.let { MaintenanceBanner(it) }
 
-        SectionHeading("Today")
+        // Not "Today" — the duty card above already owns that word, and these two cards are about
+        // what this handset is holding, not about the shift.
+        SectionHeading("On this device")
         SyncCard(state.pendingSyncCount)
         LastAttendanceCard(state.lastRecord)
 
@@ -245,23 +247,35 @@ private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
+                // The day, then the hours, then everything else. A guard glancing at Home before a
+                // shift is asking "when am I on" — so that is the line set in the largest type.
                 Text(
-                    "Today",
+                    "TODAY · ${today()}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    duty?.dutyName ?: "Not on duty",
-                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.primary,
                 )
+                Spacer(Modifier.height(2.dp))
+                val from = duty?.startsAt?.let(::shiftTime)
+                val to = duty?.endsAt?.let(::shiftTime)
                 Text(
                     when {
-                        duty == null -> "You are not rostered for a shift today"
-                        duty.startsAt != null && duty.endsAt != null ->
-                            "${shiftTime(duty.startsAt)}–${shiftTime(duty.endsAt)} · tap to see the week"
-                        else -> "Tap to see the week"
+                        duty == null -> "Not on duty"
+                        from != null && to != null -> "$from – $to"
+                        else -> "Hours not set"
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (duty == null) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                Text(
+                    when (duty) {
+                        null -> "You are not rostered for a shift today"
+                        else -> "${duty.dutyName ?: duty.dutyType.name} · tap to see the week"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -270,6 +284,10 @@ private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
         }
     }
 }
+
+/** `Mon, 13 Jul` — today, as a guard would say it. */
+private fun today(): String =
+    SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date())
 
 private data class Action(val icon: Int, val label: String, val destination: HomeAction)
 

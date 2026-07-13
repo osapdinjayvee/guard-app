@@ -1,6 +1,7 @@
 package com.minsu.guardapp.feature.reference
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -94,7 +95,10 @@ class ScheduleViewModel @Inject constructor(
  * already governed what the scanner would let them do, and until now they could not see it.
  */
 @Composable
-fun ScheduleScreen(viewModel: ScheduleViewModel = hiltViewModel()) {
+fun ScheduleScreen(
+    onOpenRound: (String) -> Unit = {},
+    viewModel: ScheduleViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LazyColumn(
@@ -137,7 +141,11 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = hiltViewModel()) {
                 }
 
                 items(state.upcoming, key = { it.date }) { day ->
-                    DayRow(day = day, isToday = day.date == state.today)
+                    DayRow(
+                        day = day,
+                        isToday = day.date == state.today,
+                        onOpenRound = { onOpenRound(day.date) },
+                    )
                 }
 
                 // Shifts already worked. Kept, because a guard does check what they did last
@@ -145,7 +153,11 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = hiltViewModel()) {
                 if (state.past.isNotEmpty()) {
                     item { GroupLabel("Earlier") }
                     items(state.past, key = { it.date }) { day ->
-                        DayRow(day = day, isToday = false)
+                        DayRow(
+                            day = day,
+                            isToday = false,
+                            onOpenRound = { onOpenRound(day.date) },
+                        )
                     }
                 }
             }
@@ -172,8 +184,11 @@ private fun GroupLabel(text: String) {
  * code and the rule it implies are the supporting detail, not the other way round.
  */
 @Composable
-private fun DayRow(day: DutyAssignment, isToday: Boolean) {
-    GuardCard {
+private fun DayRow(day: DutyAssignment, isToday: Boolean, onOpenRound: () -> Unit) {
+    // Only a roving day has a round to open. A stationed guard has one post and the row already
+    // tells them everything about it, so the card is not made to look tappable when it is not.
+    val roving = day.dutyType == DutyType.ROVING
+    GuardCard(modifier = if (roving) Modifier.clickable(onClick = onOpenRound) else Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DateBlock(day.date, isToday)
 
@@ -222,6 +237,16 @@ private fun DayRow(day: DutyAssignment, isToday: Boolean) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        if (roving) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "See the posts on this round  ›",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 

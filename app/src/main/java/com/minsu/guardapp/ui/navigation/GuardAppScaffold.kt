@@ -43,6 +43,7 @@ import com.minsu.guardapp.feature.home.HomeRoute
 import com.minsu.guardapp.feature.reference.AnnouncementsScreen
 import com.minsu.guardapp.feature.reference.CheckpointsScreen
 import com.minsu.guardapp.feature.reference.DutiesScreen
+import com.minsu.guardapp.feature.reference.RoundScreen
 import com.minsu.guardapp.feature.reference.ScheduleScreen
 import com.minsu.guardapp.feature.reports.ReportsScreen
 import com.minsu.guardapp.feature.scan.ScanQrScreen
@@ -119,7 +120,12 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                     },
                 )
             }
-            composable(GuardDestination.Schedule.route) { ScheduleScreen() }
+            composable(GuardDestination.Schedule.route) {
+                ScheduleScreen(
+                    onOpenRound = { date -> navController.navigate("$ROUTE_ROUND/$date") },
+                )
+            }
+            composable("$ROUTE_ROUND/{date}") { RoundScreen() }
             composable(GuardDestination.History.route) { HistoryScreen() }
             composable(GuardDestination.ScanQr.route) { ScanQrScreen() }
             composable(GuardDestination.Reports.route) { ReportsScreen() }
@@ -215,6 +221,7 @@ private fun NavHostController.navigateToTopLevel(destination: GuardDestination) 
 }
 
 /** Reference destinations behind Home's tiles. Not part of the bottom bar. */
+private const val ROUTE_ROUND = "schedule/round"
 private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
 private const val ROUTE_DUTIES = "reference/duties"
 private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"

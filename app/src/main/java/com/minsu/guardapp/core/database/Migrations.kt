@@ -74,4 +74,28 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
-val GUARD_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+/**
+ * Adds the post-shift self-evaluation: the questions, and the answers held on a record awaiting
+ * upload.
+ *
+ * Additive. The `evaluationsJson` column is nullable, so every attendance already sitting in the
+ * queue — captured under the old duties-acknowledgement flow — migrates untouched and still uploads.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `evaluation_questions` (
+                `id` INTEGER NOT NULL,
+                `question` TEXT NOT NULL,
+                `sortOrder` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL("ALTER TABLE attendance ADD COLUMN evaluationsJson TEXT")
+    }
+}
+
+val GUARD_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

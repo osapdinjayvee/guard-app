@@ -6,6 +6,7 @@ import com.minsu.guardapp.core.database.AnnouncementDao
 import com.minsu.guardapp.core.database.AttendanceDao
 import com.minsu.guardapp.core.database.CheckpointDao
 import com.minsu.guardapp.core.database.DutyDao
+import com.minsu.guardapp.core.database.EvaluationQuestionDao
 import com.minsu.guardapp.core.database.GUARD_MIGRATIONS
 import com.minsu.guardapp.core.database.GuardDatabase
 import com.minsu.guardapp.core.database.ScheduleDao
@@ -43,4 +44,8 @@ object DatabaseModule {
 
     @Provides
     fun announcementDao(database: GuardDatabase): AnnouncementDao = database.announcementDao()
+
+    @Provides
+    fun evaluationQuestionDao(database: GuardDatabase): EvaluationQuestionDao =
+        database.evaluationQuestionDao()
 }

@@ -49,6 +49,10 @@ class DefaultAttendanceUploader @Inject constructor(
             longitude = record.longitude?.toString()?.text(),
             accuracy = record.accuracy?.toString()?.text(),
             dutiesVersionId = record.dutiesVersionId?.toString()?.text(),
+            // The exact string written at capture, not one re-derived now. The answers were given on
+            // a phone with no signal and are being sent hours later; anything that rebuilt the
+            // payload here would be a second chance to disagree with what the guard actually said.
+            evaluations = record.evaluationsJson?.text(),
             deviceId = record.deviceId?.text(),
             selfie = selfiePart,
         ).data

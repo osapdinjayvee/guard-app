@@ -66,6 +66,17 @@ data class AttendanceEntity(
     /** Surfaced in History detail for FAILED and REJECTED rows. */
     val lastError: String? = null,
 
+    /**
+     * The post-shift self-evaluation, as JSON, for a Time Out.
+     *
+     * Stored on the record rather than in a table of its own. The answers exist only to be uploaded
+     * with the attendance they describe — the phone never queries them, reports on them, or shows
+     * them again — and a join table would buy nothing but a second thing to keep in step with a
+     * record that is already the unit of work for the sync queue. Null for a Time In or a checkpoint
+     * visit, which carry no evaluation at all.
+     */
+    val evaluationsJson: String? = null,
+
     val createdAt: Long,
     val updatedAt: Long,
 )

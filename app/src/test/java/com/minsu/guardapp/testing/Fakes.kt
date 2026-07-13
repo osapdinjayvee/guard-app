@@ -6,6 +6,7 @@ import com.minsu.guardapp.core.network.dto.AttendanceDto
 import com.minsu.guardapp.core.network.dto.CheckpointDto
 import com.minsu.guardapp.core.network.dto.DutyDto
 import com.minsu.guardapp.core.network.dto.Envelope
+import com.minsu.guardapp.core.network.dto.EvaluationQuestionDto
 import com.minsu.guardapp.core.network.dto.LoginRequest
 import com.minsu.guardapp.core.network.dto.LoginResponse
 import com.minsu.guardapp.core.network.dto.MobileSettingsDto
@@ -30,6 +31,8 @@ open class FakeGuardApi : GuardApi {
     override suspend fun checkpoint(code: String): Envelope<CheckpointDto> = error("checkpoint not stubbed")
     override suspend fun duties(): Envelope<DutyDto> = error("duties not stubbed")
     override suspend fun schedule(): Envelope<ScheduleDto> = error("schedule not stubbed")
+    override suspend fun evaluationQuestions(): Envelope<List<EvaluationQuestionDto>> =
+        error("evaluationQuestions not stubbed")
     override suspend fun announcements(): Envelope<List<AnnouncementDto>> = error("announcements not stubbed")
     override suspend fun settings(): Envelope<MobileSettingsDto> = error("settings not stubbed")
     override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> =
@@ -44,6 +47,7 @@ open class FakeGuardApi : GuardApi {
         longitude: okhttp3.RequestBody?,
         accuracy: okhttp3.RequestBody?,
         dutiesVersionId: okhttp3.RequestBody?,
+        evaluations: okhttp3.RequestBody?,
         deviceId: okhttp3.RequestBody?,
         selfie: okhttp3.MultipartBody.Part,
     ): Envelope<AttendanceDto> = error("submitAttendance not stubbed")

@@ -137,6 +137,19 @@ data class DutyAssignment(
         }
 }
 
+/** One yes/no question put to a guard at the end of their shift. */
+data class EvaluationQuestion(
+    val id: Long,
+    val question: String,
+    val sortOrder: Int,
+)
+
+/** The guard's answer to one of them, carried with the Time Out it describes. */
+data class EvaluationAnswer(
+    val questionId: Long,
+    val answer: Boolean,
+)
+
 enum class SyncState { PENDING, SYNCING, SYNCED, FAILED, REJECTED }
 
 /**
@@ -153,6 +166,12 @@ data class AttendanceDraft(
     val longitude: Double?,
     val accuracyMetres: Float?,
     val dutiesVersionId: Long?,
+    /**
+     * The post-shift self-evaluation. Non-empty only on a Time Out — an evaluation describes a shift
+     * that has ended, and one attached to a Time In would be a claim about a shift that has not
+     * happened yet. The server rejects it on anything else.
+     */
+    val evaluations: List<EvaluationAnswer> = emptyList(),
 )
 
 data class AttendanceRecord(

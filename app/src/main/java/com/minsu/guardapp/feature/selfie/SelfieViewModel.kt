@@ -12,9 +12,12 @@ import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.Duty
+import com.minsu.guardapp.domain.model.EvaluationAnswer
+import com.minsu.guardapp.domain.model.EvaluationQuestion
 import com.minsu.guardapp.domain.model.GpsFailurePolicy
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
+import com.minsu.guardapp.domain.repository.EvaluationRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,22 +56,45 @@ data class SelfieUiState(
     val isCapturing: Boolean = false,
     val capturedFile: File? = null,
     val duty: Duty? = null,
+
     /**
-     * True once the guard has accepted the photo and moved on to the duties.
+     * The post-shift self-evaluation, on a Time Out.
      *
-     * The acknowledgement is its own screen, not a checkbox tucked under the preview. It is a
-     * statement about what the guard is responsible for on this shift, and it has to be read; a
-     * tick-box competing for attention with a photograph of your own face is not read.
+     * Empty for a Time In or a checkpoint visit: an evaluation describes a shift that has *ended*,
+     * and one attached to a Time In would be a claim about a shift that had not happened yet.
      */
-    val onDutiesStep: Boolean = false,
-    val dutiesAcknowledged: Boolean = false,
+    val questions: List<EvaluationQuestion> = emptyList(),
+    /** Answers so far, keyed by question. One question is put at a time; this is what has been said. */
+    val answers: Map<Long, Boolean> = emptyMap(),
+    /** True once the photo is accepted and the guard has moved on to the questions. */
+    val onEvaluationStep: Boolean = false,
     val isSubmitting: Boolean = false,
     val submitted: Boolean = false,
     val error: String? = null,
 ) {
-    /** Submission is blocked until the guard confirms the duties checkbox (PRD §6). */
+    /** A Time Out is the only capture that carries an evaluation, because it is the only ending. */
+    val needsEvaluation: Boolean
+        get() = type == AttendanceType.TIME_OUT && questions.isNotEmpty()
+
+    /** The question currently being put to the guard, or null when they have answered them all. */
+    val currentQuestion: EvaluationQuestion?
+        get() = questions.firstOrNull { it.id !in answers }
+
+    val answeredCount: Int get() = questions.count { it.id in answers }
+
+    /**
+     * Every question, or none.
+     *
+     * A Time Out carrying four of seven answers is not a shorter evaluation — it is one where nobody
+     * can tell whether the three missing answers were "no" or "the guard closed the app", and which
+     * of those it was is exactly what the evaluation exists to find out. The server rejects a partial
+     * one; so does this.
+     */
+    val evaluationComplete: Boolean
+        get() = !needsEvaluation || questions.all { it.id in answers }
+
     val canSubmit: Boolean
-        get() = capturedFile != null && dutiesAcknowledged && !isSubmitting && !submitted
+        get() = capturedFile != null && evaluationComplete && !isSubmitting && !submitted
     /** The lines burned into the image, and shown live over the preview. Same source, both places. */
     val overlayLines: List<String>
         get() = buildList {
@@ -147,6 +173,7 @@ class SelfieViewModel @Inject constructor(
     private val profiles: ProfileRepository,
     private val settings: SettingsRepository,
     private val duties: DutyRepository,
+    private val evaluations: EvaluationRepository,
     private val attendance: AttendanceRepository,
     private val location: LocationProvider,
     private val selfieCapture: SelfieCapture,
@@ -173,6 +200,9 @@ class SelfieViewModel @Inject constructor(
                     guardName = profiles.observe().first()?.name.orEmpty(),
                     settings = current,
                     duty = duties.activeDuty(),
+                    // Only a Time Out is asked. Read from the cache, so the questions are there at
+                    // the end of a shift at a perimeter post with no signal.
+                    questions = if (type == AttendanceType.TIME_OUT) evaluations.questions() else emptyList(),
                     nowMillis = clock.nowMillis(),
                 )
             }
@@ -206,14 +236,27 @@ class SelfieViewModel @Inject constructor(
         }
     }
 
-    fun setDutiesAcknowledged(acknowledged: Boolean) =
-        _uiState.update { it.copy(dutiesAcknowledged = acknowledged) }
+    /**
+     * Answer the question currently on screen, and move to the next.
+     *
+     * Answers accumulate rather than being collected at the end, so a guard who is interrupted has
+     * not lost the four they already gave.
+     */
+    fun answer(questionId: Long, answer: Boolean) = _uiState.update {
+        it.copy(answers = it.answers + (questionId to answer))
+    }
 
-    /** The photo is accepted; on to the duties. */
-    fun proceedToDuties() = _uiState.update { it.copy(onDutiesStep = true) }
+    /** Un-answer the last question, so a mis-tap is one tap to fix rather than a restart. */
+    fun previousQuestion() = _uiState.update { state ->
+        val lastAnswered = state.questions.lastOrNull { it.id in state.answers } ?: return@update state
+        state.copy(answers = state.answers - lastAnswered.id)
+    }
 
-    /** Back to the photo, without discarding it. */
-    fun backToPhoto() = _uiState.update { it.copy(onDutiesStep = false) }
+    /** The photo is accepted; on to the questions — or straight to submit, if there are none. */
+    fun proceedToEvaluation() = _uiState.update { it.copy(onEvaluationStep = true) }
+
+    /** Back to the photo, without discarding it or the answers already given. */
+    fun backToPhoto() = _uiState.update { it.copy(onEvaluationStep = false) }
 
     /**
      * The commit. Writes the record to Room and enqueues a sync — local-first, so the
@@ -242,6 +285,9 @@ class SelfieViewModel @Inject constructor(
                         longitude = state.fix?.longitude,
                         accuracyMetres = state.fix?.accuracyMetres,
                         dutiesVersionId = state.duty?.id,
+                        evaluations = state.questions.mapNotNull { question ->
+                            state.answers[question.id]?.let { EvaluationAnswer(question.id, it) }
+                        },
                     ),
                 )
             }.fold(
@@ -295,10 +341,11 @@ class SelfieViewModel @Inject constructor(
             it.copy(
                 capturedFile = null,
                 error = null,
-                onDutiesStep = false,
-                // A retake means the earlier acknowledgement referred to a photo that no longer
-                // exists. Make them tick it again rather than carrying consent forward silently.
-                dutiesAcknowledged = false,
+                onEvaluationStep = false,
+                // The answers are kept. They describe the *shift*, not the photograph — a guard who
+                // retakes a blurred selfie has not changed whether the logbook was completed, and
+                // making them answer seven questions again to fix one bad frame is how you teach
+                // them to accept a bad frame.
             )
         }
     }

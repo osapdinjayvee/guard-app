@@ -5,6 +5,7 @@ import com.minsu.guardapp.core.network.dto.AttendanceDto
 import com.minsu.guardapp.core.network.dto.CheckpointDto
 import com.minsu.guardapp.core.network.dto.DutyDto
 import com.minsu.guardapp.core.network.dto.Envelope
+import com.minsu.guardapp.core.network.dto.EvaluationQuestionDto
 import com.minsu.guardapp.core.network.dto.LoginRequest
 import com.minsu.guardapp.core.network.dto.LoginResponse
 import com.minsu.guardapp.core.network.dto.MobileSettingsDto
@@ -54,6 +55,11 @@ interface GuardApi {
         @Part("longitude") longitude: RequestBody?,
         @Part("accuracy") accuracy: RequestBody?,
         @Part("duties_version_id") dutiesVersionId: RequestBody?,
+        /**
+         * The post-shift self-evaluation, as a JSON array. Present on a Time Out and absent on
+         * anything else — the server requires it on one and prohibits it on the other.
+         */
+        @Part("evaluations") evaluations: RequestBody?,
         @Part("device_id") deviceId: RequestBody?,
         @Part selfie: MultipartBody.Part,
     ): Envelope<AttendanceDto>
@@ -82,6 +88,14 @@ interface GuardApi {
 
     @GET("duties")
     suspend fun duties(): Envelope<DutyDto>
+
+    /**
+     * The post-shift self-evaluation questions. Cached, because a guard closing a shift at a
+     * perimeter post has no more signal than one opening it — and a Time Out they cannot complete
+     * is a shift they cannot clock out of.
+     */
+    @GET("evaluation-questions")
+    suspend fun evaluationQuestions(): Envelope<List<EvaluationQuestionDto>>
 
     @GET("announcements")
     suspend fun announcements(): Envelope<List<AnnouncementDto>>

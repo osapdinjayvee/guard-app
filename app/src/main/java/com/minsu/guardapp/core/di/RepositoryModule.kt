@@ -20,6 +20,7 @@ import com.minsu.guardapp.data.DefaultAnnouncementRepository
 import com.minsu.guardapp.core.security.DataStoreRosterPreferences
 import com.minsu.guardapp.core.security.RosterPreferences
 import com.minsu.guardapp.data.DefaultAttendanceRepository
+import com.minsu.guardapp.data.DefaultEvaluationRepository
 import com.minsu.guardapp.data.DefaultScheduleRepository
 import com.minsu.guardapp.data.DefaultCheckpointRepository
 import com.minsu.guardapp.data.DefaultDutyRepository
@@ -32,6 +33,7 @@ import com.minsu.guardapp.domain.repository.AuthRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
+import com.minsu.guardapp.domain.repository.EvaluationRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.Binds
@@ -106,6 +108,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindScheduleRepository(impl: DefaultScheduleRepository): ScheduleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindEvaluationRepository(impl: DefaultEvaluationRepository): EvaluationRepository
 
     @Binds
     @Singleton

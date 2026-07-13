@@ -75,7 +75,13 @@ class AttendanceSubmitTest {
     )
 
     private fun repo(dao: AttendanceDao, scheduler: SyncScheduler, profile: GuardProfile?) =
-        DefaultAttendanceRepository(dao, FakeProfiles(profile), scheduler, Clock { 5_000L })
+        DefaultAttendanceRepository(
+            dao,
+            FakeProfiles(profile),
+            scheduler,
+            EvaluationJson(com.squareup.moshi.Moshi.Builder().build()),
+            Clock { 5_000L },
+        )
 
     /**
      * "Sync now" has to do both halves. Re-queueing without draining leaves the records sitting
@@ -108,7 +114,10 @@ class AttendanceSubmitTest {
         assertEquals(SyncStatus.PENDING, record.syncStatus)
         assertEquals(7L, record.userId)
         assertEquals("GATE-A", record.checkpointCode)
-        assertTrue("duties must be acknowledged by the time we commit", record.dutiesAcknowledged)
+        // The duties acknowledgement is no longer a gate on the capture. The column survives for
+        // records written under the old rule; nothing sets it now, and claiming otherwise would be
+        // recording consent nobody gave.
+        assertFalse("nothing is acknowledged any more", record.dutiesAcknowledged)
         assertEquals(12L, record.dutiesVersionId)
         assertEquals(1, scheduler.syncRequests)
     }

@@ -113,7 +113,7 @@ class MigrationTest {
             )
         }
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, *GUARD_MIGRATIONS)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, *GUARD_MIGRATIONS)
 
         db.query("SELECT id, syncStatus FROM attendance").use { c ->
             assertTrue("the unsynced attendance survived every migration", c.moveToFirst())
@@ -134,6 +134,17 @@ class MigrationTest {
         }
         db.query("SELECT COUNT(*) FROM announcements").use { c ->
             assertTrue("the announcements table exists", c.moveToFirst())
+        }
+
+        // The post-shift self-evaluation, added by 4->5. The column on `attendance` is nullable, so
+        // the pending record above — captured under the old duties-acknowledgement flow — migrates
+        // untouched and still uploads.
+        db.query("SELECT COUNT(*) FROM evaluation_questions").use { c ->
+            assertTrue("the evaluation questions table exists", c.moveToFirst())
+        }
+        db.query("SELECT evaluationsJson FROM attendance").use { c ->
+            assertTrue(c.moveToFirst())
+            assertTrue("a record from before the evaluation existed carries none", c.isNull(0))
         }
     }
 

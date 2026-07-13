@@ -10,6 +10,7 @@ import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
+import com.minsu.guardapp.domain.repository.EvaluationRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
@@ -41,6 +42,7 @@ class HomeViewModel @Inject constructor(
     private val checkpoints: CheckpointRepository,
     private val duties: DutyRepository,
     private val schedule: ScheduleRepository,
+    private val evaluations: EvaluationRepository,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
@@ -102,6 +104,9 @@ class HomeViewModel @Inject constructor(
             // happening in a basement with no signal. Fetching it there would leave the guard
             // unable to submit an attendance they have already taken.
             duties.refresh()
+            // Needed at Time Out, which happens at the end of a shift, at a post, with no signal.
+            // Cached here for the same reason as the duties and the roster.
+            evaluations.refresh()
             _uiState.update { it.copy(isRefreshing = false) }
         }
     }

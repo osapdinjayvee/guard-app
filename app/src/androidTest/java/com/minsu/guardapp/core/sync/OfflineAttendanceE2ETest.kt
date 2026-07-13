@@ -16,6 +16,7 @@ import com.minsu.guardapp.core.network.ApiError
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.dto.AttendanceDto
 import com.minsu.guardapp.data.DefaultAttendanceRepository
+import com.minsu.guardapp.data.EvaluationJson
 import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.GuardProfile
@@ -104,7 +105,13 @@ class OfflineAttendanceE2ETest {
     fun tearDown() = db.close()
 
     private fun repository(scheduler: SyncScheduler, now: Long = t0) =
-        DefaultAttendanceRepository(dao, FakeProfiles(guard), scheduler, Clock { now })
+        DefaultAttendanceRepository(
+            dao,
+            FakeProfiles(guard),
+            scheduler,
+            EvaluationJson(com.squareup.moshi.Moshi.Builder().build()),
+            Clock { now },
+        )
 
     private fun draft(capturedAt: Long = t0) = AttendanceDraft(
         checkpointId = 1,

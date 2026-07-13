@@ -17,6 +17,8 @@ import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.repository.ProfileRepository
+import com.minsu.guardapp.domain.model.EvaluationQuestion
+import com.minsu.guardapp.domain.repository.EvaluationRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
@@ -100,6 +102,14 @@ class HomeViewModelTest {
             return ApiResult.Success(Unit)
         }
     }
+    private var evaluationRefreshes = 0
+    private val evaluationRepo = object : EvaluationRepository {
+        override suspend fun questions(): List<EvaluationQuestion> = emptyList()
+        override suspend fun refresh(): ApiResult<Unit> {
+            evaluationRefreshes++
+            return ApiResult.Success(Unit)
+        }
+    }
     private val monitor = object : NetworkMonitor {
         override val isOnline: Flow<Boolean> = online
     }
@@ -111,7 +121,7 @@ class HomeViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel() =
-        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, monitor)
+        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, monitor)
 
     @Test
     fun `streams local state without waiting on the network`() = runTest {
@@ -185,7 +195,7 @@ class HomeViewModelTest {
             override suspend fun clear() = Unit
         }
 
-        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, monitor)
+        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, monitor)
 
         assertEquals("Juan Dela Cruz", vm.uiState.value.profile?.name)
         assertFalse(vm.uiState.value.isRefreshing)

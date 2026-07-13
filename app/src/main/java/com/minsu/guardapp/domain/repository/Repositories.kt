@@ -9,6 +9,7 @@ import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.Duty
 import com.minsu.guardapp.domain.model.DutyAssignment
+import com.minsu.guardapp.domain.model.EvaluationQuestion
 import com.minsu.guardapp.domain.model.GuardProfile
 import kotlinx.coroutines.flow.Flow
 
@@ -126,6 +127,19 @@ interface ScheduleRepository {
      * shift must end where it began.
      */
     suspend fun postTimedInAtToday(): Long?
+
+    suspend fun refresh(): ApiResult<Unit>
+}
+
+/**
+ * The post-shift self-evaluation questions.
+ *
+ * Cached, because a guard closing a shift at a perimeter post has no more signal than one opening
+ * it — and a Time Out they cannot complete is a shift they cannot clock out of.
+ */
+interface EvaluationRepository {
+    /** In the order the office wants them asked. */
+    suspend fun questions(): List<EvaluationQuestion>
 
     suspend fun refresh(): ApiResult<Unit>
 }

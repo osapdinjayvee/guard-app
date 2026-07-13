@@ -27,12 +27,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,7 +56,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minsu.guardapp.R
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
-import com.minsu.guardapp.domain.model.Duty
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.PermissionGate
 import com.minsu.guardapp.ui.components.ScreenTitle
@@ -95,17 +94,18 @@ fun SelfieScreen(
                 // The acknowledgement is a screen of its own, reached only once the photo is
                 // accepted. Three decisions on one scroll — is the photo good, have I read the
                 // duties, do I submit — is how a guard ticks a box they never read.
-                captured != null && state.onDutiesStep -> DutiesAcknowledgement(
+                captured != null && state.onEvaluationStep -> ShiftEvaluation(
                     state = state,
-                    onAcknowledge = viewModel::setDutiesAcknowledged,
-                    onBack = viewModel::backToPhoto,
+                    onAnswer = viewModel::answer,
+                    onBack = viewModel::previousQuestion,
+                    onBackToPhoto = viewModel::backToPhoto,
                     onSubmit = viewModel::submit,
                 )
 
                 captured != null -> CapturedPreview(
                     path = captured.absolutePath,
                     onRetake = viewModel::retake,
-                    onContinue = viewModel::proceedToDuties,
+                    onContinue = viewModel::proceedToEvaluation,
                 )
 
                 else -> LiveCapture(state, viewModel, onCancel)
@@ -309,19 +309,25 @@ private fun CapturedPreview(path: String, onRetake: () -> Unit, onContinue: () -
 }
 
 /**
- * Step 2: the Duties & Responsibilities acknowledgement (PRD §6), on a screen of its own.
+ * Step 2, on a Time Out: the post-shift self-evaluation.
  *
- * The full text, not a summary — a guard cannot acknowledge what they have not been shown. Submit
- * stays disabled until the box is ticked, and the id of this revision is stored on the record, so
- * what was agreed to can always be recovered even after the document is rewritten.
+ * One question at a time, Yes or No, two large targets. A guard answers this at the end of a twelve
+ * hour shift, tired and wanting to go home, and a seven-item form on one screen collects a column of
+ * identical taps that is evidence of nothing. One question filling the screen is one decision.
+ *
+ * A Time In and a roving guard's checkpoint visits never see this: an evaluation describes a shift
+ * that has *ended*.
  */
 @Composable
-private fun DutiesAcknowledgement(
+private fun ShiftEvaluation(
     state: SelfieUiState,
-    onAcknowledge: (Boolean) -> Unit,
+    onAnswer: (Long, Boolean) -> Unit,
     onBack: () -> Unit,
+    onBackToPhoto: () -> Unit,
     onSubmit: () -> Unit,
 ) {
+    val question = state.currentQuestion
+
     Column(
         Modifier
             .fillMaxSize()
@@ -329,121 +335,136 @@ private fun DutiesAcknowledgement(
             .padding(horizontal = 4.dp),
     ) {
         Text(
-            state.duty?.title ?: "Duties & Responsibilities",
+            "End of shift",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "Read this before recording your attendance.",
+            if (question != null) {
+                "Question ${state.answeredCount + 1} of ${state.questions.size}"
+            } else {
+                "All ${state.questions.size} answered"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        Spacer(Modifier.height(16.dp))
-        GuardCard {
-            Text(
-                state.duty?.content
-                    ?: "Duties have not been downloaded to this phone yet. Open Home while online.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
+        Spacer(Modifier.height(8.dp))
+        LinearProgressIndicator(
+            progress = {
+                if (state.questions.isEmpty()) 1f
+                else state.answeredCount.toFloat() / state.questions.size
+            },
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.primary,
+        )
 
-        Spacer(Modifier.height(16.dp))
-        GuardCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = state.dutiesAcknowledged,
-                    onCheckedChange = onAcknowledge,
-                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
-                )
-                Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.height(20.dp))
+
+        if (question != null) {
+            GuardCard {
                 Text(
-                    "I have read and understood my duties and responsibilities.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    question.question,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-        }
 
-        state.error?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = onBack,
-                enabled = !state.isSubmitting,
-                modifier = Modifier.weight(1f).height(54.dp),
-            ) {
-                Text("Back", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                // Yes and No are equals. Styling one as the primary action would tell a tired guard
+                // which answer the app expects, and they would give it.
+                OutlinedButton(
+                    onClick = { onAnswer(question.id, false) },
+                    modifier = Modifier.weight(1f).height(64.dp),
+                ) {
+                    Text("No", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+                OutlinedButton(
+                    onClick = { onAnswer(question.id, true) },
+                    modifier = Modifier.weight(1f).height(64.dp),
+                ) {
+                    Text("Yes", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
             }
-            Button(
-                onClick = onSubmit,
-                enabled = state.canSubmit,
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier.weight(1f).height(54.dp),
-            ) {
-                if (state.isSubmitting) {
-                    CircularProgressIndicator(
-                        Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                } else {
-                    Text("Submit", fontWeight = FontWeight.Bold)
+
+            if (state.answeredCount > 0) {
+                Spacer(Modifier.height(6.dp))
+                TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                    Text("Back to the previous question", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            // Every answer, shown back before it is committed. A guard has just made seven decisions
+            // one screen at a time, and this is the only place they can see what they actually said.
+            GuardCard {
+                state.questions.forEach { q ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            q.question,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            if (state.answers[q.id] == true) "Yes" else "No",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            state.error?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = onBack,
+                    enabled = !state.isSubmitting,
+                    modifier = Modifier.weight(1f).height(54.dp),
+                ) {
+                    Text("Change last", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onSubmit,
+                    enabled = state.canSubmit,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                    modifier = Modifier.weight(1f).height(54.dp),
+                ) {
+                    if (state.isSubmitting) {
+                        CircularProgressIndicator(
+                            Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text("Submit", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
-    }
-}
 
-/**
- * The Duties & Responsibilities acknowledgement gate (PRD §6). The checkbox drives
- * [SelfieUiState.canSubmit]; the record cannot be committed until it is confirmed.
- */
-@Composable
-private fun DutiesGate(duty: Duty?, acknowledged: Boolean, onAcknowledge: (Boolean) -> Unit) {
-    GuardCard {
-        Text(
-            duty?.title ?: "Duties & Responsibilities",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            duty?.content ?: "Duties are not available offline yet. They will sync when you are online.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = duty != null) { onAcknowledge(!acknowledged) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(
-                checked = acknowledged,
-                onCheckedChange = { onAcknowledge(it) },
-                enabled = duty != null,
-            )
-            Text(
-                "I have read and understood my duties and responsibilities.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+        TextButton(onClick = onBackToPhoto, modifier = Modifier.fillMaxWidth()) {
+            Text("Back to the photo", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

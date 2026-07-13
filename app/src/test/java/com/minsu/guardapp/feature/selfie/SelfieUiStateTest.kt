@@ -4,6 +4,7 @@ import com.minsu.guardapp.core.location.LocationFix
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
+import com.minsu.guardapp.domain.model.EvaluationQuestion
 import com.minsu.guardapp.domain.model.GpsFailurePolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -171,38 +172,133 @@ class SelfieUiStateTest {
         assertFalse(current.canCapture)
     }
 
-    // --- Duties acknowledgement gate (PRD §6) ---
+    // --- The post-shift self-evaluation (Time Out only) ---
 
-    private fun capturedState() = state(fix = fix(8f)).copy(
+    private val questions = listOf(
+        EvaluationQuestion(1, "Did you remain at your assigned post for the whole shift?", 1),
+        EvaluationQuestion(2, "Was the logbook completed and up to date at handover?", 2),
+        EvaluationQuestion(3, "Was there any incident during your shift?", 3),
+    )
+
+    private fun capturedState(
+        type: AttendanceType = AttendanceType.TIME_IN,
+        questions: List<EvaluationQuestion> = emptyList(),
+        answers: Map<Long, Boolean> = emptyMap(),
+    ) = state(fix = fix(8f)).copy(
+        type = type,
         capturedFile = java.io.File("/tmp/selfie.jpg"),
+        questions = questions,
+        answers = answers,
     )
 
     @Test
-    fun `submission is blocked until the duties checkbox is confirmed`() {
-        val unacknowledged = capturedState().copy(dutiesAcknowledged = false)
-
-        assertFalse(unacknowledged.canSubmit)
-    }
-
-    @Test
-    fun `an acknowledged capture can be submitted`() {
-        val acknowledged = capturedState().copy(dutiesAcknowledged = true)
-
-        assertTrue(acknowledged.canSubmit)
-    }
-
-    @Test
     fun `there is nothing to submit before a photo is captured`() {
-        val noPhoto = state(fix = fix(8f)).copy(capturedFile = null, dutiesAcknowledged = true)
+        val noPhoto = state(fix = fix(8f)).copy(capturedFile = null)
 
         assertFalse(noPhoto.canSubmit)
     }
 
     @Test
     fun `a submitted record cannot be submitted again`() {
-        val alreadyDone = capturedState().copy(dutiesAcknowledged = true, submitted = true)
+        assertFalse(capturedState().copy(submitted = true).canSubmit)
+    }
 
-        assertFalse(alreadyDone.canSubmit)
+    /**
+     * An evaluation describes a shift that has *ended*. Attached to a Time In it would be a claim
+     * about a shift that had not happened yet — and the server rejects it outright.
+     */
+    @Test
+    fun `a time in carries no evaluation and submits on the photo alone`() {
+        val timeIn = capturedState(type = AttendanceType.TIME_IN, questions = questions)
+
+        assertFalse(timeIn.needsEvaluation)
+        assertTrue("nothing to ask, so nothing to block", timeIn.canSubmit)
+    }
+
+    /** Nor does a roving guard's patrol visit: it is a passing-through, not an ending. */
+    @Test
+    fun `a checkpoint visit carries no evaluation`() {
+        val visit = capturedState(type = AttendanceType.CHECKPOINT, questions = questions)
+
+        assertFalse(visit.needsEvaluation)
+        assertTrue(visit.canSubmit)
+    }
+
+    @Test
+    fun `a time out is asked the questions, one at a time, in order`() {
+        val timeOut = capturedState(type = AttendanceType.TIME_OUT, questions = questions)
+
+        assertTrue(timeOut.needsEvaluation)
+        assertEquals(questions[0], timeOut.currentQuestion)
+
+        val afterFirst = timeOut.copy(answers = mapOf(1L to true))
+        assertEquals("the next unanswered one", questions[1], afterFirst.currentQuestion)
+        assertEquals(1, afterFirst.answeredCount)
+    }
+
+    /**
+     * Every question, or none.
+     *
+     * A Time Out carrying two of three answers is not a shorter evaluation — it is one where nobody
+     * can tell whether the missing answer was "no" or "the guard closed the app". Which of those it
+     * was is exactly what the evaluation exists to find out, so a partial one cannot be submitted.
+     */
+    @Test
+    fun `a partially answered time out cannot be submitted`() {
+        val partial = capturedState(
+            type = AttendanceType.TIME_OUT,
+            questions = questions,
+            answers = mapOf(1L to true, 2L to false),
+        )
+
+        assertFalse(partial.evaluationComplete)
+        assertFalse("two of three is not an evaluation", partial.canSubmit)
+    }
+
+    @Test
+    fun `a fully answered time out can be submitted`() {
+        val complete = capturedState(
+            type = AttendanceType.TIME_OUT,
+            questions = questions,
+            answers = mapOf(1L to true, 2L to true, 3L to false),
+        )
+
+        assertTrue(complete.evaluationComplete)
+        assertNull("no question left to put", complete.currentQuestion)
+        assertTrue(complete.canSubmit)
+    }
+
+    /**
+     * A No is an answer, not an omission.
+     *
+     * The office is looking for the exceptions — the log that was not written up, the incident nobody
+     * was told about — so a shift answered entirely "no" must submit exactly as readily as one
+     * answered entirely "yes".
+     */
+    @Test
+    fun `a time out answered entirely no is still complete`() {
+        val allNo = capturedState(
+            type = AttendanceType.TIME_OUT,
+            questions = questions,
+            answers = mapOf(1L to false, 2L to false, 3L to false),
+        )
+
+        assertTrue(allNo.evaluationComplete)
+        assertTrue(allNo.canSubmit)
+    }
+
+    /**
+     * A Time Out with nothing to ask is not blocked.
+     *
+     * The office may have deactivated every question, or the phone may never have downloaded them.
+     * Neither is a reason to leave a guard unable to clock out of a shift they have finished.
+     */
+    @Test
+    fun `a time out with no questions cached is not blocked from submitting`() {
+        val noQuestions = capturedState(type = AttendanceType.TIME_OUT, questions = emptyList())
+
+        assertFalse(noQuestions.needsEvaluation)
+        assertTrue(noQuestions.canSubmit)
     }
 
     private companion object {

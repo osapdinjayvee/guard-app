@@ -146,6 +146,7 @@ class DefaultAttendanceRepository @Inject constructor(
     private val dao: AttendanceDao,
     private val profiles: ProfileRepository,
     private val syncScheduler: SyncScheduler,
+    private val evaluations: EvaluationJson,
     private val clock: Clock,
 ) : AttendanceRepository {
 
@@ -200,8 +201,14 @@ class DefaultAttendanceRepository @Inject constructor(
                 latitude = draft.latitude,
                 longitude = draft.longitude,
                 accuracy = draft.accuracyMetres,
-                dutiesAcknowledged = true,
+                // No longer a gate on the capture; kept for records written under the old rule.
+                dutiesAcknowledged = false,
                 dutiesVersionId = draft.dutiesVersionId,
+                // Serialised onto the record so the answers survive on the phone until the upload
+                // lands — which may be hours, and across a process death.
+                evaluationsJson = draft.evaluations
+                    .takeIf { it.isNotEmpty() }
+                    ?.let(evaluations::encode),
                 deviceId = null,
                 syncStatus = SyncStatus.PENDING,
                 createdAt = now,

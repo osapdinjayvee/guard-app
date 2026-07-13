@@ -51,4 +51,27 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
-val GUARD_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+/**
+ * Persists announcements.
+ *
+ * They were held in memory, so an announcement survived for as long as the process did and no
+ * longer. A guard who reopened the app at their post, offline, saw nothing — while the profile,
+ * checkpoints, duties and roster were all still there. Additive; no existing row is touched.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `announcements` (
+                `id` INTEGER NOT NULL,
+                `title` TEXT NOT NULL,
+                `content` TEXT NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
+val GUARD_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)

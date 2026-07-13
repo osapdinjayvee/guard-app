@@ -2,6 +2,7 @@ package com.minsu.guardapp.core.di
 
 import android.content.Context
 import androidx.room.Room
+import com.minsu.guardapp.core.database.AnnouncementDao
 import com.minsu.guardapp.core.database.AttendanceDao
 import com.minsu.guardapp.core.database.CheckpointDao
 import com.minsu.guardapp.core.database.DutyDao
@@ -39,4 +40,7 @@ object DatabaseModule {
 
     @Provides
     fun scheduleDao(database: GuardDatabase): ScheduleDao = database.scheduleDao()
+
+    @Provides
+    fun announcementDao(database: GuardDatabase): AnnouncementDao = database.announcementDao()
 }

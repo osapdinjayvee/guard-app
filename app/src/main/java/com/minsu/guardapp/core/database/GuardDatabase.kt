@@ -16,8 +16,9 @@ import androidx.room.TypeConverters
         CheckpointEntity::class,
         DutyEntity::class,
         ScheduleEntity::class,
+        AnnouncementEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(SyncStatusConverter::class, AttendanceTypeConverter::class)
@@ -26,6 +27,7 @@ abstract class GuardDatabase : RoomDatabase() {
     abstract fun checkpointDao(): CheckpointDao
     abstract fun dutyDao(): DutyDao
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun announcementDao(): AnnouncementDao
 
     companion object {
         const val NAME = "guard.db"

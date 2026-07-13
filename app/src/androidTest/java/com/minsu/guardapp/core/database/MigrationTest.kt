@@ -77,6 +77,66 @@ class MigrationTest {
         }
     }
 
+
+    /**
+     * Every migration, run in sequence over a database holding an unsynced record.
+     *
+     * The record is the point. This database is the only copy of an attendance between the shutter
+     * and the server, and a migration that drops a table takes the evidence with it. Each new
+     * migration is additive, but "is additive" is a claim, and this is what checks it.
+     */
+    @Test
+    fun migrating_all_the_way_to_the_current_schema_keeps_the_pending_record() {
+        val id = "5f1c8a4e-0000-4000-8000-000000000002"
+
+        helper.createDatabase(TEST_DB, 1).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO attendance (
+                    id, userId, checkpointId, checkpointCode, attendanceType, selfiePath,
+                    capturedAt, latitude, longitude, accuracy, dutiesAcknowledged, dutiesVersionId,
+                    deviceId, syncStatus, serverId, retryCount, claimedAt, nextAttemptAt, lastError,
+                    createdAt, updatedAt
+                ) VALUES (
+                    '$id', 7, 1, 'CP-MAIN-GATE', 'TIME_IN', '/data/selfie.jpg',
+                    1783663331000, 13.1775, 121.2803, 8.4, 1, 1,
+                    NULL, 'PENDING', NULL, 0, NULL, NULL, NULL,
+                    1783663331000, 1783663331000
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO checkpoints (id, code, name, description, latitude, longitude, status, updatedAt)
+                VALUES (2, 'CLINIC', 'Clinic', NULL, 13.18, 121.28, 'ACTIVE', 1783663331000)
+                """.trimIndent()
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, *GUARD_MIGRATIONS)
+
+        db.query("SELECT id, syncStatus FROM attendance").use { c ->
+            assertTrue("the unsynced attendance survived every migration", c.moveToFirst())
+            assertEquals(id, c.getString(0))
+            assertEquals("PENDING", c.getString(1))
+            assertEquals("no duplicates", 1, c.count)
+        }
+
+        db.query("SELECT code FROM checkpoints").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("CLINIC", c.getString(0))
+        }
+
+        // The tables the roster and the office notices live in, added by 2->3 and 3->4. A guard
+        // reopening the app at a post with no signal reads both from here.
+        db.query("SELECT COUNT(*) FROM schedule").use { c ->
+            assertTrue("the schedule table exists", c.moveToFirst())
+        }
+        db.query("SELECT COUNT(*) FROM announcements").use { c ->
+            assertTrue("the announcements table exists", c.moveToFirst())
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
     }

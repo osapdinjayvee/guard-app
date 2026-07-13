@@ -5,6 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.minsu.guardapp.core.common.Clock
+import com.minsu.guardapp.core.database.AnnouncementDao
+import com.minsu.guardapp.core.database.AnnouncementEntity
 import com.minsu.guardapp.core.network.ApiErrorMapper
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
@@ -66,24 +69,46 @@ class DefaultProfileRepository @Inject constructor(
 }
 
 /**
- * Announcements are advisory. They are held in memory rather than cached: a stale notice is
- * worse than none, and nothing in the attendance flow depends on them.
+ * Announcements, cached on the phone like everything else.
+ *
+ * They were held in memory, on the reasoning that they are advisory and a stale notice is worse than
+ * none. Both halves of that turned out to be wrong. An announcement is the office telling a guard
+ * something they need on shift — a gate closed, a route changed — and the moment they most need to
+ * re-read it is standing at a post with no signal, which is exactly when the process has been killed
+ * and the memory is empty. The profile, the checkpoints, the duties and the roster all survive that;
+ * this was the one thing that did not.
+ *
+ * "Stale beats absent" is the same trade the rest of the app already makes: a failed refresh leaves
+ * what is there alone rather than blanking the screen. A withdrawn announcement does disappear —
+ * the table is replaced wholesale, not merged — so a notice the office pulled will not linger.
  */
 @Singleton
 class DefaultAnnouncementRepository @Inject constructor(
+    private val dao: AnnouncementDao,
     private val api: GuardApi,
     private val errors: ApiErrorMapper,
+    private val clock: Clock,
 ) : AnnouncementRepository {
 
-    private val state = MutableStateFlow<List<Announcement>>(emptyList())
-
-    override fun observe(): Flow<List<Announcement>> = state
+    override fun observe(): Flow<List<Announcement>> =
+        dao.observeAll().map { rows -> rows.map { Announcement(it.id, it.title, it.content) } }
 
     override suspend fun refresh(): ApiResult<Unit> =
         errors.call { api.announcements().data }
             .also { result ->
                 if (result is ApiResult.Success) {
-                    state.value = result.value.map { Announcement(it.id, it.title, it.content) }
+                    val now = clock.nowMillis()
+                    dao.clear()
+                    dao.upsertAll(
+                        result.value.map {
+                            AnnouncementEntity(
+                                id = it.id,
+                                title = it.title,
+                                content = it.content,
+                                updatedAt = now,
+                            )
+                        }
+                    )
                 }
             }
             .map { }

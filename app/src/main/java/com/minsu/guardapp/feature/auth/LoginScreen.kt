@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -87,16 +88,35 @@ fun LoginScreen(
 
         Spacer(Modifier.height(32.dp))
 
-        FieldLabel("Email")
+        /*
+         * "Username or email", and a plain text keyboard.
+         *
+         * It said "Email", with an email keyboard and a `you@minsu.edu.ph` hint. Guards do not have
+         * email addresses — every real one on the roster has a null email, and signs in with a
+         * username like `romualdoatienza`. The server has always accepted either, so the credential
+         * worked; but the guard was being told, by the label, the hint and the keyboard, that they
+         * had been given the wrong one. Most people obey a form that confidently contradicts them,
+         * and conclude the account is broken.
+         *
+         * Username first in the label, because that is what nearly everyone here will type.
+         */
+        FieldLabel("Username or email")
         OutlinedTextField(
             value = state.username,
             onValueChange = onUsernameChange,
-            placeholder = { Text("you@minsu.edu.ph") },
+            placeholder = { Text("e.g. juandelacruz") },
             singleLine = true,
             enabled = !state.isSubmitting,
             shape = RoundedCornerShape(28.dp),
             colors = fieldColours(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                // No autocorrect, and no capitalisation: a keyboard that helpfully capitalises the
+                // first letter of a username turns a correct credential into a rejected one.
+                autoCorrectEnabled = false,
+                capitalization = KeyboardCapitalization.None,
+                imeAction = ImeAction.Next,
+            ),
             modifier = Modifier.fillMaxWidth(),
         )
 

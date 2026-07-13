@@ -6,14 +6,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.repository.ScheduleRepository
@@ -45,22 +47,39 @@ import java.util.Locale
 import javax.inject.Inject
 
 data class ScheduleUiState(
-    val days: List<DutyAssignment> = emptyList(),
+    /** Today first, then the days ahead. What the guard opened the screen to find. */
+    val upcoming: List<DutyAssignment> = emptyList(),
+    /** Days already worked, kept below. Newest first, so the most recent shift is nearest the fold. */
+    val past: List<DutyAssignment> = emptyList(),
     val today: String = "",
     /** False when nobody has joined this login to a guard on the roster. Not the same as "no shifts". */
     val linked: Boolean = true,
-)
+) {
+    val isEmpty: Boolean get() = upcoming.isEmpty() && past.isEmpty()
+}
 
 @HiltViewModel
 class ScheduleViewModel @Inject constructor(
     schedule: ScheduleRepository,
+    // Injected rather than read from the system, so "which of these days is today" is a thing a
+    // test can pin down instead of a thing that depends on when the suite happens to run.
+    private val clock: Clock,
 ) : ViewModel() {
 
     val uiState: StateFlow<ScheduleUiState> = combine(
         schedule.observeAll(),
         schedule.isLinked,
     ) { days, linked ->
-        ScheduleUiState(days = days, today = todayIso(), linked = linked)
+        // The server sends a fixed window — last week through next week — so this list is a dozen
+        // rows at most and never needs paging. But sorted by date alone it opens on shifts the guard
+        // has already worked, and buries the one they are about to. Today leads.
+        val today = todayIso(clock.nowMillis())
+        ScheduleUiState(
+            upcoming = days.filter { it.date >= today }.sortedBy { it.date },
+            past = days.filter { it.date < today }.sortedByDescending { it.date },
+            today = today,
+            linked = linked,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScheduleUiState())
 }
 
@@ -78,46 +97,71 @@ class ScheduleViewModel @Inject constructor(
 fun ScheduleScreen(viewModel: ScheduleViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Column(
-        Modifier
+    LazyColumn(
+        modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 24.dp),
+            .padding(horizontal = 20.dp),
+        contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTitle("My schedule")
+        item { ScreenTitle("My schedule") }
 
         when {
             // An admin error, and named as one. "You have no shifts" would be a different sentence
             // about a different problem, and would leave the guard waiting for a rota that is never
             // going to arrive.
-            !state.linked -> Notice(
-                "Your account is not on the duty roster",
-                "Nobody has connected this login to a guard on the roster, so the app cannot see " +
-                    "what you are scheduled for. Ask the office to link your account.",
-            )
+            !state.linked -> item {
+                Notice(
+                    "Your account is not on the duty roster",
+                    "Nobody has connected this login to a guard on the roster, so the app cannot " +
+                        "see what you are scheduled for. Ask the office to link your account.",
+                )
+            }
 
-            state.days.isEmpty() -> Notice(
-                "No shifts downloaded yet",
-                "Open this screen while you have a connection and your roster will be saved to " +
-                    "this phone.",
-            )
+            state.isEmpty -> item {
+                Notice(
+                    "No shifts downloaded yet",
+                    "Open this screen while you have a connection and your roster will be saved " +
+                        "to this phone.",
+                )
+            }
 
             else -> {
-                Text(
-                    "Saved on this phone, so it works with no signal.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                item {
+                    Text(
+                        "Saved on this phone, so it works with no signal.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
-                state.days.forEach { day ->
+                items(state.upcoming, key = { it.date }) { day ->
                     DayRow(day = day, isToday = day.date == state.today)
+                }
+
+                // Shifts already worked. Kept, because a guard does check what they did last
+                // Thursday — but kept below, because it is not what they came here to see.
+                if (state.past.isNotEmpty()) {
+                    item { GroupLabel("Earlier") }
+                    items(state.past, key = { it.date }) { day ->
+                        DayRow(day = day, isToday = false)
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun GroupLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }
 
 /**
@@ -287,8 +331,8 @@ private fun Notice(title: String, body: String) {
     }
 }
 
-private fun todayIso(): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+private fun todayIso(millis: Long): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(millis))
 
 /** One piece of `2026-07-13` — `EEE` → `Mon`, `d` → `13`, `MMM` → `Jul`. */
 private fun datePart(iso: String, pattern: String): String = runCatching {

@@ -94,6 +94,7 @@ class HomeViewModelTest {
     private var scheduleRefreshes = 0
     private val scheduleRepo = object : ScheduleRepository {
         override fun observeToday(): Flow<DutyAssignment?> = MutableStateFlow(null)
+        override fun observeAll(): Flow<List<DutyAssignment>> = MutableStateFlow(emptyList())
         override suspend fun today(): DutyAssignment? = null
         override val isLinked: Flow<Boolean> = MutableStateFlow(true)
         override suspend fun postTimedInAtToday(): Long? = null

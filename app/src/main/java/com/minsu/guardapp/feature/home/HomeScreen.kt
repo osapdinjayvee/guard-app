@@ -2,6 +2,7 @@ package com.minsu.guardapp.feature.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minsu.guardapp.R
 import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AttendanceRecord
+import com.minsu.guardapp.domain.model.DutyAssignment
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.GuardProfile
 import com.minsu.guardapp.domain.model.SyncState
 import com.minsu.guardapp.ui.components.GuardCard
@@ -53,7 +56,7 @@ import java.util.Date
 import java.util.Locale
 
 /** Where Home's tiles lead. The scaffold owns the navigator; Home only says where it wants to go. */
-enum class HomeAction { Scan, History, Reports, Checkpoints, Duties, Announcements, Account }
+enum class HomeAction { Scan, History, Reports, Schedule, Checkpoints, Duties, Announcements, Account }
 
 @Composable
 fun HomeRoute(
@@ -86,6 +89,8 @@ fun HomeScreen(
         // control that swallows taps: searching attendance is not a feature this app has.
 
         QuickActions(onAction)
+
+        TodayDutyCard(state.todayDuty, onOpen = { onAction(HomeAction.Schedule) })
 
         state.maintenanceMessage?.let { MaintenanceBanner(it) }
 
@@ -201,19 +206,81 @@ private fun ConnectivityPill(isOnline: Boolean) {
     }
 }
 
+/**
+ * What the guard is on today, on the screen they open first.
+ *
+ * The roster already governs what the scanner will accept — a stationed guard is refused a second
+ * checkpoint, and an unrostered day is refused outright. Deciding that silently and only telling the
+ * guard at the moment of refusal, with a camera open and a shift starting, is the wrong order.
+ */
+@Composable
+private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
+    GuardCard(modifier = Modifier.clickable(onClick = onOpen)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = CircleShape,
+                color = if (duty == null) {
+                    MaterialTheme.colorScheme.surfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            ) {
+                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        when (duty?.dutyType) {
+                            DutyType.STATIONED -> "SG"
+                            DutyType.ROVING -> "RG"
+                            null -> "—"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (duty == null) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onPrimary
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Today",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    duty?.dutyName ?: "Not on duty",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    when {
+                        duty == null -> "You are not rostered for a shift today"
+                        duty.startsAt != null && duty.endsAt != null ->
+                            "${duty.startsAt.take(5)}–${duty.endsAt.take(5)} · tap to see the week"
+                        else -> "Tap to see the week"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 private data class Action(val icon: Int, val label: String, val destination: HomeAction)
 
 @Composable
 private fun QuickActions(onAction: (HomeAction) -> Unit) {
     // Every tile goes somewhere. A tile that does nothing when tapped is worse than an absent one:
     // it teaches the guard that the app is broken, and they stop trusting the tiles that do work.
-    //
-    // "Schedule" used to sit here and led nowhere. Shift scheduling is not in this product, so the
-    // tile is gone rather than being left as furniture.
     val actions = listOf(
         Action(R.drawable.ic_finger_print, "Attendance", HomeAction.Scan),
         Action(R.drawable.ic_dtr, "DTR", HomeAction.History),
         Action(R.drawable.ic_grades, "Reports", HomeAction.Reports),
+        Action(R.drawable.ic_calendar, "Schedule", HomeAction.Schedule),
         Action(R.drawable.ic_locator, "Checkpoints", HomeAction.Checkpoints),
         Action(R.drawable.ic_document, "Duties", HomeAction.Duties),
         Action(R.drawable.ic_megaphone, "Announcement", HomeAction.Announcements),

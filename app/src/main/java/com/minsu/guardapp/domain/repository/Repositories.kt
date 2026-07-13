@@ -115,6 +115,9 @@ interface ScheduleRepository {
     /** Today's duty. Null on a rest day, or a week the office has not filled in. */
     fun observeToday(): Flow<DutyAssignment?>
 
+    /** Every rostered day the phone knows about, in order. What the guard is shown. */
+    fun observeAll(): Flow<List<DutyAssignment>>
+
     suspend fun today(): DutyAssignment?
 
     /** False when nobody has joined this login to a guard on the roster. Not the same as "no shift". */

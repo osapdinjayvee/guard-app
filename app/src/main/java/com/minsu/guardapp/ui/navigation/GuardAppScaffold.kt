@@ -43,6 +43,7 @@ import com.minsu.guardapp.feature.home.HomeRoute
 import com.minsu.guardapp.feature.reference.AnnouncementsScreen
 import com.minsu.guardapp.feature.reference.CheckpointsScreen
 import com.minsu.guardapp.feature.reference.DutiesScreen
+import com.minsu.guardapp.feature.reference.ScheduleScreen
 import com.minsu.guardapp.feature.reports.ReportsScreen
 import com.minsu.guardapp.feature.scan.ScanQrScreen
 
@@ -110,6 +111,7 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             HomeAction.Reports -> navController.navigateToTopLevel(GuardDestination.Reports)
                             HomeAction.Account -> navController.navigateToTopLevel(GuardDestination.Account)
 
+                            HomeAction.Schedule -> navController.navigate(ROUTE_SCHEDULE)
                             HomeAction.Checkpoints -> navController.navigate(ROUTE_CHECKPOINTS)
                             HomeAction.Duties -> navController.navigate(ROUTE_DUTIES)
                             HomeAction.Announcements -> navController.navigate(ROUTE_ANNOUNCEMENTS)
@@ -124,6 +126,7 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
 
             // Reference screens, reached from Home's tiles. Not bottom-bar destinations: they are
             // things a guard looks up, not places they work from.
+            composable(ROUTE_SCHEDULE) { ScheduleScreen() }
             composable(ROUTE_CHECKPOINTS) { CheckpointsScreen() }
             composable(ROUTE_DUTIES) { DutiesScreen() }
             composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen() }
@@ -212,6 +215,7 @@ private fun NavHostController.navigateToTopLevel(destination: GuardDestination) 
 }
 
 /** Reference destinations behind Home's tiles. Not part of the bottom bar. */
+private const val ROUTE_SCHEDULE = "reference/schedule"
 private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
 private const val ROUTE_DUTIES = "reference/duties"
 private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"

@@ -37,6 +37,9 @@ class DefaultScheduleRepository @Inject constructor(
 
     override suspend fun today(): DutyAssignment? = dao.forDate(todayDate())?.toDomain()
 
+    override fun observeAll(): Flow<List<DutyAssignment>> =
+        dao.observeAll().map { rows -> rows.mapNotNull { it.toDomain() } }
+
     override val isLinked: Flow<Boolean> = roster.linked
 
     /**

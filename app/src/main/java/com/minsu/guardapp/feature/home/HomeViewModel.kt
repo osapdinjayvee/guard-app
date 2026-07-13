@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.minsu.guardapp.core.connectivity.NetworkMonitor
 import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AttendanceRecord
+import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.GuardProfile
 import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
@@ -31,6 +32,8 @@ data class HomeUiState(
     val maintenanceMessage: String? = null,
     val isOnline: Boolean = true,
     val isRefreshing: Boolean = false,
+    /** Today's duty. Null on a rest day — which Home says plainly rather than leaving blank. */
+    val todayDuty: DutyAssignment? = null,
 )
 
 @HiltViewModel
@@ -78,6 +81,13 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
+            }
+        }
+
+        // The roster governs what the scanner will let the guard do. Until now they could not see it.
+        viewModelScope.launch {
+            schedule.observeToday().collect { duty ->
+                _uiState.update { it.copy(todayDuty = duty) }
             }
         }
 

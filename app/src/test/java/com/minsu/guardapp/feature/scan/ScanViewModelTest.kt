@@ -55,6 +55,7 @@ class ScanViewModelTest {
         private val timedInAt: Long? = null,
     ) : ScheduleRepository {
         override fun observeToday(): Flow<DutyAssignment?> = MutableStateFlow(duty)
+        override fun observeAll(): Flow<List<DutyAssignment>> = MutableStateFlow(listOfNotNull(duty))
         override suspend fun today(): DutyAssignment? = duty
         override val isLinked: Flow<Boolean> = MutableStateFlow(linked)
         override suspend fun postTimedInAtToday(): Long? = timedInAt

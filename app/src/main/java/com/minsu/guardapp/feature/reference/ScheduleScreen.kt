@@ -35,6 +35,7 @@ import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.ScreenTitle
+import com.minsu.guardapp.ui.format.shiftTime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -167,8 +168,8 @@ private fun DayRow(day: DutyAssignment, isToday: Boolean) {
                 Text(
                     buildString {
                         append(day.dutyName ?: day.dutyType.name)
-                        val from = day.startsAt?.take(5)
-                        val to = day.endsAt?.take(5)
+                        val from = shiftTime(day.startsAt)
+                        val to = shiftTime(day.endsAt)
                         if (from != null && to != null) append(" · $from–$to")
                     },
                     style = MaterialTheme.typography.bodySmall,

@@ -110,8 +110,8 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             HomeAction.History -> navController.navigateToTopLevel(GuardDestination.History)
                             HomeAction.Reports -> navController.navigateToTopLevel(GuardDestination.Reports)
                             HomeAction.Account -> navController.navigateToTopLevel(GuardDestination.Account)
+                            HomeAction.Schedule -> navController.navigateToTopLevel(GuardDestination.Schedule)
 
-                            HomeAction.Schedule -> navController.navigate(ROUTE_SCHEDULE)
                             HomeAction.Checkpoints -> navController.navigate(ROUTE_CHECKPOINTS)
                             HomeAction.Duties -> navController.navigate(ROUTE_DUTIES)
                             HomeAction.Announcements -> navController.navigate(ROUTE_ANNOUNCEMENTS)
@@ -119,6 +119,7 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                     },
                 )
             }
+            composable(GuardDestination.Schedule.route) { ScheduleScreen() }
             composable(GuardDestination.History.route) { HistoryScreen() }
             composable(GuardDestination.ScanQr.route) { ScanQrScreen() }
             composable(GuardDestination.Reports.route) { ReportsScreen() }
@@ -126,7 +127,6 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
 
             // Reference screens, reached from Home's tiles. Not bottom-bar destinations: they are
             // things a guard looks up, not places they work from.
-            composable(ROUTE_SCHEDULE) { ScheduleScreen() }
             composable(ROUTE_CHECKPOINTS) { CheckpointsScreen() }
             composable(ROUTE_DUTIES) { DutiesScreen() }
             composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen() }
@@ -215,7 +215,6 @@ private fun NavHostController.navigateToTopLevel(destination: GuardDestination) 
 }
 
 /** Reference destinations behind Home's tiles. Not part of the bottom bar. */
-private const val ROUTE_SCHEDULE = "reference/schedule"
 private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
 private const val ROUTE_DUTIES = "reference/duties"
 private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"

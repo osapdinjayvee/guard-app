@@ -106,4 +106,4 @@ private fun date(millis: Long): String =
     SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(millis))
 
 private fun dateTime(millis: Long): String =
-    SimpleDateFormat("d MMM yyyy HH:mm", Locale.getDefault()).format(Date(millis))
+    SimpleDateFormat("d MMM yyyy h:mm a", Locale.getDefault()).format(Date(millis))

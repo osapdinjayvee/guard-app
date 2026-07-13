@@ -352,4 +352,4 @@ class SelfieViewModel @Inject constructor(
 }
 
 private fun dateTime(millis: Long): String =
-    SimpleDateFormat("d MMM yyyy · HH:mm:ss", Locale.getDefault()).format(Date(millis))
+    SimpleDateFormat("d MMM yyyy · h:mm:ss a", Locale.getDefault()).format(Date(millis))

@@ -46,6 +46,7 @@ import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.QuickAction
 import com.minsu.guardapp.ui.components.SearchField
 import com.minsu.guardapp.ui.components.SectionHeading
+import com.minsu.guardapp.ui.format.shiftTime
 import com.minsu.guardapp.ui.theme.Accent
 import com.minsu.guardapp.ui.theme.GuardAppTheme
 import com.minsu.guardapp.ui.theme.SyncFailed
@@ -259,7 +260,7 @@ private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
                     when {
                         duty == null -> "You are not rostered for a shift today"
                         duty.startsAt != null && duty.endsAt != null ->
-                            "${duty.startsAt.take(5)}–${duty.endsAt.take(5)} · tap to see the week"
+                            "${shiftTime(duty.startsAt)}–${shiftTime(duty.endsAt)} · tap to see the week"
                         else -> "Tap to see the week"
                     },
                     style = MaterialTheme.typography.bodySmall,

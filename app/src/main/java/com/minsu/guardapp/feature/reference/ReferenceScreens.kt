@@ -67,10 +67,13 @@ class CheckpointsViewModel @Inject constructor(
 }
 
 @Composable
-fun CheckpointsScreen(viewModel: CheckpointsViewModel = hiltViewModel()) {
+fun CheckpointsScreen(
+    onBack: () -> Unit = {},
+    viewModel: CheckpointsViewModel = hiltViewModel(),
+) {
     val checkpoints by viewModel.checkpoints.collectAsStateWithLifecycle()
 
-    ReferencePage("Checkpoints") {
+    ReferencePage("Checkpoints", onBack) {
         if (checkpoints.isEmpty()) {
             Empty(
                 "No checkpoints downloaded yet",
@@ -132,10 +135,13 @@ class DutiesViewModel @Inject constructor(
 }
 
 @Composable
-fun DutiesScreen(viewModel: DutiesViewModel = hiltViewModel()) {
+fun DutiesScreen(
+    onBack: () -> Unit = {},
+    viewModel: DutiesViewModel = hiltViewModel(),
+) {
     val duty by viewModel.duty.collectAsStateWithLifecycle()
 
-    ReferencePage("Duties") {
+    ReferencePage("Duties", onBack) {
         val current = duty
         if (current == null) {
             Empty(
@@ -182,10 +188,13 @@ class AnnouncementsViewModel @Inject constructor(
 }
 
 @Composable
-fun AnnouncementsScreen(viewModel: AnnouncementsViewModel = hiltViewModel()) {
+fun AnnouncementsScreen(
+    onBack: () -> Unit = {},
+    viewModel: AnnouncementsViewModel = hiltViewModel(),
+) {
     val announcements by viewModel.announcements.collectAsStateWithLifecycle()
 
-    ReferencePage("Announcements") {
+    ReferencePage("Announcements", onBack) {
         if (announcements.isEmpty()) {
             Empty("Nothing from the office", "Announcements posted by the office will appear here.")
             return@ReferencePage
@@ -213,7 +222,11 @@ fun AnnouncementsScreen(viewModel: AnnouncementsViewModel = hiltViewModel()) {
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-private fun ReferencePage(title: String, content: @Composable () -> Unit) {
+private fun ReferencePage(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable () -> Unit,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -223,7 +236,7 @@ private fun ReferencePage(title: String, content: @Composable () -> Unit) {
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        ScreenTitle(title)
+        ScreenTitle(title, onBack = onBack)
         content()
     }
 }

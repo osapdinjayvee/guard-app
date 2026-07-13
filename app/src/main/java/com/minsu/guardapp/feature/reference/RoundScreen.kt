@@ -117,7 +117,10 @@ class RoundViewModel @Inject constructor(
 }
 
 @Composable
-fun RoundScreen(viewModel: RoundViewModel = hiltViewModel()) {
+fun RoundScreen(
+    onBack: () -> Unit = {},
+    viewModel: RoundViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LazyColumn(
@@ -128,7 +131,7 @@ fun RoundScreen(viewModel: RoundViewModel = hiltViewModel()) {
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { ScreenTitle("My round") }
+        item { ScreenTitle("My round", onBack = onBack) }
 
         item { ProgressCard(state) }
 

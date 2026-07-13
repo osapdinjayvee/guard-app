@@ -125,7 +125,7 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                     onOpenRound = { date -> navController.navigate("$ROUTE_ROUND/$date") },
                 )
             }
-            composable("$ROUTE_ROUND/{date}") { RoundScreen() }
+            composable("$ROUTE_ROUND/{date}") { RoundScreen(onBack = navController::popBackStack) }
             composable(GuardDestination.History.route) { HistoryScreen() }
             composable(GuardDestination.ScanQr.route) { ScanQrScreen() }
             composable(GuardDestination.Reports.route) { ReportsScreen() }
@@ -133,9 +133,9 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
 
             // Reference screens, reached from Home's tiles. Not bottom-bar destinations: they are
             // things a guard looks up, not places they work from.
-            composable(ROUTE_CHECKPOINTS) { CheckpointsScreen() }
-            composable(ROUTE_DUTIES) { DutiesScreen() }
-            composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen() }
+            composable(ROUTE_CHECKPOINTS) { CheckpointsScreen(onBack = navController::popBackStack) }
+            composable(ROUTE_DUTIES) { DutiesScreen(onBack = navController::popBackStack) }
+            composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen(onBack = navController::popBackStack) }
         }
     }
 }

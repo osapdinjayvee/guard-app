@@ -3,6 +3,7 @@ package com.minsu.guardapp.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.minsu.guardapp.ui.theme.PillLabel
@@ -102,19 +108,41 @@ fun SectionHeading(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Centred title with a back affordance, as on the portal's Payroll screen. */
+/**
+ * Centred title, with a back arrow when the screen was pushed onto another.
+ *
+ * The back arrow is not decoration. A screen reached from a tile or a row is not a place the bottom
+ * bar can return you from, and the only way out was the system gesture — which on a cased phone in
+ * the dark is a guess. Pass [onBack] on every screen that sits on top of another; leave it null on
+ * the five the bar owns.
+ */
 @Composable
-fun ScreenTitle(title: String, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
+fun ScreenTitle(title: String, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
+    Box(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        if (onBack != null) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .semantics { contentDescription = "Back" },
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+        }
         Text(
             title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier
+                .align(Alignment.Center)
+                // Keeps the title optically centred on the screen rather than centred in the space
+                // left over beside the arrow.
+                .padding(horizontal = 48.dp),
         )
     }
 }

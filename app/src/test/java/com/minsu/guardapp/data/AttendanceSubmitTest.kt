@@ -29,35 +29,48 @@ class AttendanceSubmitTest {
         override suspend fun requeue(id: String, now: Long) = 0
         var requeueAllCalls = 0
         override suspend fun requeueAll(now: Long): Int { requeueAllCalls++; return 0 }
-        override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
-        override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceEntity>> = MutableStateFlow(inserted)
-        override fun observePage(limit: Int, offset: Int): Flow<List<AttendanceEntity>> = MutableStateFlow(inserted)
-        override fun observeUnsyncedCount(statuses: List<SyncStatus>): Flow<Int> = MutableStateFlow(0)
-        override suspend fun eligibleForSync(now: Long, limit: Int, statuses: List<SyncStatus>) = emptyList<AttendanceEntity>()
+        override fun observeStuckCount(userId: Long): Flow<Int> = MutableStateFlow(0)
+        override fun observeInRange(userId: Long, fromMillis: Long, toMillis: Long): Flow<List<AttendanceEntity>> =
+            MutableStateFlow(inserted.filter { it.userId == userId })
+        override fun observePage(userId: Long, limit: Int, offset: Int): Flow<List<AttendanceEntity>> =
+            MutableStateFlow(inserted.filter { it.userId == userId })
+        override fun observeUnsyncedCount(userId: Long, statuses: List<SyncStatus>): Flow<Int> = MutableStateFlow(0)
+        override suspend fun eligibleForSync(userId: Long, now: Long, limit: Int, statuses: List<SyncStatus>) =
+            emptyList<AttendanceEntity>()
         override suspend fun claim(id: String, now: Long, statuses: List<SyncStatus>) = 0
         override suspend fun reclaimStaleClaims(staleBefore: Long, now: Long) = 0
         override suspend fun markSynced(id: String, serverId: Long, now: Long) = Unit
         override suspend fun markFailed(id: String, error: String, nextAttemptAt: Long, now: Long) = Unit
         override suspend fun markRejected(id: String, error: String, now: Long) = Unit
         override suspend fun releaseClaim(id: String, now: Long) = Unit
-        override suspend fun firstTimeInBetween(fromMillis: Long, toMillis: Long): AttendanceEntity? =
+        override suspend fun firstTimeInBetween(userId: Long, fromMillis: Long, toMillis: Long): AttendanceEntity? =
             inserted.firstOrNull {
-                it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.TIME_IN &&
+                it.userId == userId &&
+                    it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.TIME_IN &&
                     it.capturedAt in fromMillis until toMillis
             }
         override suspend fun checkpointVisitCountsBetween(
+            userId: Long,
             fromMillis: Long,
             toMillis: Long,
         ): List<com.minsu.guardapp.core.database.CheckpointVisitCount> =
             inserted
                 .filter {
-                    it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.CHECKPOINT &&
+                    it.userId == userId &&
+                        it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.CHECKPOINT &&
                         it.capturedAt in fromMillis until toMillis
                 }
                 .groupBy { it.checkpointId }
-                .map { (id, rows) ->
-                    com.minsu.guardapp.core.database.CheckpointVisitCount(id, rows.size)
+                .map { (id, rows) -> com.minsu.guardapp.core.database.CheckpointVisitCount(id, rows.size) }
+        override suspend fun lastVisitedCheckpointBetween(userId: Long, fromMillis: Long, toMillis: Long): Long? =
+            inserted
+                .filter {
+                    it.userId == userId &&
+                        it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.CHECKPOINT &&
+                        it.capturedAt in fromMillis until toMillis
                 }
+                .maxByOrNull { it.capturedAt }
+                ?.checkpointId
         override suspend fun count() = inserted.size
     }
 

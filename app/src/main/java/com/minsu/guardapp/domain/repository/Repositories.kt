@@ -79,6 +79,14 @@ interface AttendanceRepository {
     suspend fun checkpointVisitsToday(): Map<Long, Int>
 
     /**
+     * The post this guard visited most recently today, or null if they have not visited one.
+     *
+     * Two visits to the same post back to back are not a patrol — they are a guard standing at one
+     * door scanning it twice. The round requires them to go somewhere else in between.
+     */
+    suspend fun lastVisitedCheckpointToday(): Long?
+
+    /**
      * Commits a captured attendance record to the local database, then requests a sync. The
      * record is durable the instant this returns — the write is local-first, never
      * network-first, so a valid attendance is never lost to connectivity.

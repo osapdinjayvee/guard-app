@@ -26,11 +26,12 @@ interface AttendanceDao {
     @Query(
         """
         SELECT * FROM attendance
-        WHERE capturedAt >= :fromMillis AND capturedAt < :toMillis
+        WHERE userId = :userId
+          AND capturedAt >= :fromMillis AND capturedAt < :toMillis
         ORDER BY capturedAt DESC
         """
     )
-    fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceEntity>>
+    fun observeInRange(userId: Long, fromMillis: Long, toMillis: Long): Flow<List<AttendanceEntity>>
 
     /**
      * Manual retry of a failed or rejected record: back to PENDING, backoff cleared, so the next
@@ -64,28 +65,41 @@ interface AttendanceDao {
     suspend fun requeueAll(now: Long): Int
 
     /** Records the server has refused or failed to take. Surfaced so they are never silent. */
-    @Query("SELECT COUNT(*) FROM attendance WHERE syncStatus IN ('FAILED', 'REJECTED')")
-    fun observeStuckCount(): Flow<Int>
+    @Query(
+        """
+        SELECT COUNT(*) FROM attendance
+        WHERE userId = :userId AND syncStatus IN ('FAILED', 'REJECTED')
+        """
+    )
+    fun observeStuckCount(userId: Long): Flow<Int>
 
-    @Query("SELECT * FROM attendance ORDER BY capturedAt DESC LIMIT :limit OFFSET :offset")
-    fun observePage(limit: Int, offset: Int = 0): Flow<List<AttendanceEntity>>
+    @Query(
+        """
+        SELECT * FROM attendance WHERE userId = :userId
+        ORDER BY capturedAt DESC LIMIT :limit OFFSET :offset
+        """
+    )
+    fun observePage(userId: Long, limit: Int, offset: Int = 0): Flow<List<AttendanceEntity>>
 
     /** Home's pending badge. Anything that still owes the server a record. */
-    @Query("SELECT COUNT(*) FROM attendance WHERE syncStatus IN (:statuses)")
+    @Query("SELECT COUNT(*) FROM attendance WHERE userId = :userId AND syncStatus IN (:statuses)")
     fun observeUnsyncedCount(
+        userId: Long,
         statuses: List<SyncStatus> = SyncStatus.UNSYNCED,
     ): Flow<Int>
 
     @Query(
         """
         SELECT * FROM attendance
-        WHERE syncStatus IN (:statuses)
+        WHERE userId = :userId
+          AND syncStatus IN (:statuses)
           AND (nextAttemptAt IS NULL OR nextAttemptAt <= :now)
         ORDER BY capturedAt ASC
         LIMIT :limit
         """
     )
     suspend fun eligibleForSync(
+        userId: Long,
         now: Long,
         limit: Int = 20,
         statuses: List<SyncStatus> = SyncStatus.CLAIMABLE,
@@ -187,13 +201,14 @@ interface AttendanceDao {
     @Query(
         """
         SELECT * FROM attendance
-        WHERE attendanceType = 'TIME_IN'
+        WHERE userId = :userId
+          AND attendanceType = 'TIME_IN'
           AND capturedAt >= :fromMillis AND capturedAt < :toMillis
         ORDER BY capturedAt ASC
         LIMIT 1
         """
     )
-    suspend fun firstTimeInBetween(fromMillis: Long, toMillis: Long): AttendanceEntity?
+    suspend fun firstTimeInBetween(userId: Long, fromMillis: Long, toMillis: Long): AttendanceEntity?
 
     /**
      * Patrol visits per post in a window — the round, as this phone knows it.
@@ -206,12 +221,35 @@ interface AttendanceDao {
     @Query(
         """
         SELECT checkpointId AS checkpointId, COUNT(*) AS visits FROM attendance
-        WHERE attendanceType = 'CHECKPOINT'
+        WHERE userId = :userId
+          AND attendanceType = 'CHECKPOINT'
           AND capturedAt >= :fromMillis AND capturedAt < :toMillis
         GROUP BY checkpointId
         """
     )
-    suspend fun checkpointVisitCountsBetween(fromMillis: Long, toMillis: Long): List<CheckpointVisitCount>
+    suspend fun checkpointVisitCountsBetween(
+        userId: Long,
+        fromMillis: Long,
+        toMillis: Long,
+    ): List<CheckpointVisitCount>
+
+    /**
+     * The last post this guard visited today, if any.
+     *
+     * Two visits to the same post back to back are not a patrol — they are a guard standing still.
+     * The round requires the guard to go somewhere else in between.
+     */
+    @Query(
+        """
+        SELECT checkpointId FROM attendance
+        WHERE userId = :userId
+          AND attendanceType = 'CHECKPOINT'
+          AND capturedAt >= :fromMillis AND capturedAt < :toMillis
+        ORDER BY capturedAt DESC
+        LIMIT 1
+        """
+    )
+    suspend fun lastVisitedCheckpointBetween(userId: Long, fromMillis: Long, toMillis: Long): Long?
 
     @Query("SELECT COUNT(*) FROM attendance")
     suspend fun count(): Int

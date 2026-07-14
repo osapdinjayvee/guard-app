@@ -28,6 +28,7 @@ import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.util.Calendar
 import javax.inject.Inject
@@ -161,10 +162,25 @@ class DefaultAttendanceRepository @Inject constructor(
     private val clock: Clock,
 ) : AttendanceRepository {
 
-    override fun observeUnsyncedCount(): Flow<Int> = dao.observeUnsyncedCount()
+    /**
+     * The guard whose records these are.
+     *
+     * Every read below is scoped to them. A handset is handed on between shifts, and the records of
+     * the guard who had it last are still in the table — as they should be, they are evidence — but
+     * they are not this guard's history, this guard's round, or this guard's Time In.
+     *
+     * `-1` when nobody is signed in: an id no guard has, so the queries return nothing rather than
+     * everything.
+     */
+    private fun currentUserId(): Flow<Long> = profiles.observe().map { it?.id ?: NO_USER }
+
+    override fun observeUnsyncedCount(): Flow<Int> =
+        currentUserId().flatMapLatest { dao.observeUnsyncedCount(it) }
 
     override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> =
-        dao.observePage(limit).map { entities -> entities.map { it.toDomain() } }
+        currentUserId().flatMapLatest { userId ->
+            dao.observePage(userId, limit).map { entities -> entities.map { it.toDomain() } }
+        }
 
     override fun observeRecord(id: String): Flow<AttendanceRecord?> =
         dao.observeById(id).map { it?.toDomain() }
@@ -175,7 +191,8 @@ class DefaultAttendanceRepository @Inject constructor(
         if (dao.requeue(id, clock.nowMillis()) > 0) syncScheduler.requestSync()
     }
 
-    override fun observeStuckCount(): Flow<Int> = dao.observeStuckCount()
+    override fun observeStuckCount(): Flow<Int> =
+        currentUserId().flatMapLatest { dao.observeStuckCount(it) }
 
     /**
      * Unlike [retry], this always drains — even when nothing was stuck. The queue may hold records
@@ -189,7 +206,10 @@ class DefaultAttendanceRepository @Inject constructor(
     }
 
     override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
-        dao.observeInRange(fromMillis, toMillis).map { entities -> entities.map { it.toDomain() } }
+        currentUserId().flatMapLatest { userId ->
+            dao.observeInRange(userId, fromMillis, toMillis)
+                .map { entities -> entities.map { it.toDomain() } }
+        }
 
     /**
      * Midnight to midnight in the guard's own timezone, not UTC's — a 23:50 scan belongs to the day
@@ -197,6 +217,21 @@ class DefaultAttendanceRepository @Inject constructor(
      * into tomorrow and lose it from tonight's round.
      */
     override suspend fun checkpointVisitsToday(): Map<Long, Int> {
+        val (from, to) = todayBounds()
+
+        return dao.checkpointVisitCountsBetween(userId(), from, to)
+            .associate { it.checkpointId to it.visits }
+    }
+
+    override suspend fun lastVisitedCheckpointToday(): Long? {
+        val (from, to) = todayBounds()
+
+        return dao.lastVisitedCheckpointBetween(userId(), from, to)
+    }
+
+    private suspend fun userId(): Long = profiles.observe().first()?.id ?: NO_USER
+
+    private fun todayBounds(): Pair<Long, Long> {
         val start = Calendar.getInstance().apply {
             timeInMillis = clock.nowMillis()
             set(Calendar.HOUR_OF_DAY, 0)
@@ -207,8 +242,7 @@ class DefaultAttendanceRepository @Inject constructor(
         val from = start.timeInMillis
         start.add(Calendar.DAY_OF_MONTH, 1)
 
-        return dao.checkpointVisitCountsBetween(from, start.timeInMillis)
-            .associate { it.checkpointId to it.visits }
+        return from to start.timeInMillis
     }
 
     override suspend fun submit(id: String, draft: AttendanceDraft) {
@@ -219,7 +253,7 @@ class DefaultAttendanceRepository @Inject constructor(
         dao.insert(
             AttendanceEntity(
                 id = id,
-                userId = profiles.observe().first()?.id ?: 0L,
+                userId = userId(),
                 checkpointId = draft.checkpointId,
                 checkpointCode = draft.checkpointCode,
                 attendanceType = when (draft.type) {
@@ -249,3 +283,6 @@ class DefaultAttendanceRepository @Inject constructor(
         syncScheduler.requestSync()
     }
 }
+
+/** An id no guard has. Scopes a query to nobody rather than to everybody when nobody is signed in. */
+private const val NO_USER = -1L

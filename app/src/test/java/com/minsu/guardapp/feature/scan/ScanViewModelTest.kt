@@ -333,17 +333,21 @@ class ScanViewModelTest {
         schedule: ScheduleRepository,
         checkpoints: CheckpointRepository,
         visits: Map<Long, Int> = emptyMap(),
+        lastVisited: Long? = null,
         settings: AppSettings = AppSettings(),
         nowMillis: Long = NOON,
     ) = ScanViewModel(
         checkpoints = checkpoints,
         schedule = schedule,
-        attendance = FakeAttendance(visits),
+        attendance = FakeAttendance(visits, lastVisited),
         settings = FakeSettings(settings),
         clock = Clock { nowMillis },
     )
 
-    private class FakeAttendance(private val visits: Map<Long, Int>) : AttendanceRepository {
+    private class FakeAttendance(
+        private val visits: Map<Long, Int>,
+        private val lastVisited: Long? = null,
+    ) : AttendanceRepository {
         override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
@@ -353,6 +357,7 @@ class ScanViewModelTest {
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
             MutableStateFlow(emptyList())
         override suspend fun checkpointVisitsToday(): Map<Long, Int> = visits
+        override suspend fun lastVisitedCheckpointToday(): Long? = lastVisited
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
     }
 
@@ -526,5 +531,49 @@ class ScanViewModelTest {
         assertEquals(listOf(AttendanceType.CHECKPOINT), state.allowedTypes)
         assertTrue(state.notice!!.contains("FENCE-3"))
         assertTrue(state.notice!!.contains("patrol checkpoint"))
+    }
+
+    /**
+     * A patrol is movement.
+     *
+     * A guard who scans the same door twice in succession has not gone anywhere, and the round must
+     * not be satisfiable by standing at one post. The visit is removed; the notice says to walk on.
+     */
+    @Test
+    fun `the same post cannot be scanned twice in a row`() = runTest {
+        val vm = scanner(
+            schedule = roster(),
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            visits = mapOf(gateA.id to 1),
+            lastVisited = gateA.id,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertFalse(AttendanceType.CHECKPOINT in state.allowedTypes)
+        assertTrue(state.notice!!.contains("just visited GATE-A"))
+    }
+
+    /** Another post in between is exactly what the rule asks for. It must then be scannable again. */
+    @Test
+    fun `a post can be scanned again once another has been visited`() = runTest {
+        val vm = scanner(
+            schedule = roster(),
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            visits = mapOf(gateA.id to 1, clinic.id to 1),
+            lastVisited = clinic.id,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertTrue(AttendanceType.CHECKPOINT in state.allowedTypes)
     }
 }

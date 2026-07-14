@@ -10,8 +10,10 @@ import com.minsu.guardapp.core.database.AttendanceEntity
 import com.minsu.guardapp.core.network.ApiError
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.isRetriable
+import com.minsu.guardapp.domain.repository.ProfileRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.first
 import kotlin.math.min
 
 /**
@@ -25,6 +27,7 @@ class AttendanceSyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val dao: AttendanceDao,
     private val uploader: AttendanceUploader,
+    private val profiles: ProfileRepository,
     private val clock: Clock,
 ) : CoroutineWorker(appContext, params) {
 
@@ -37,7 +40,17 @@ class AttendanceSyncWorker @AssistedInject constructor(
 
         var sawTransientFailure = false
 
-        for (record in dao.eligibleForSync(now = now, limit = BATCH)) {
+        /*
+         * Only the signed-in guard's records are uploaded.
+         *
+         * The upload is authenticated with whoever's token is on the phone right now, and the server
+         * files the record against that guard. A pending capture left behind by the previous shift
+         * would therefore be uploaded as *this* guard's attendance — their face, their post, someone
+         * else's name. It waits instead, and goes up when its owner signs back in.
+         */
+        val userId = profiles.observe().first()?.id ?: return Result.success()
+
+        for (record in dao.eligibleForSync(userId = userId, now = now, limit = BATCH)) {
             // CAS claim. rows-affected 0 means another worker took it first — never double-send.
             if (dao.claim(record.id, now = clock.nowMillis()) == 0) continue
 

@@ -11,6 +11,7 @@ import com.minsu.guardapp.core.network.map
 import com.minsu.guardapp.core.security.RosterPreferences
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
+import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -27,6 +28,7 @@ class DefaultScheduleRepository @Inject constructor(
     private val dao: ScheduleDao,
     private val attendance: AttendanceDao,
     private val roster: RosterPreferences,
+    private val profiles: ProfileRepository,
     private val api: GuardApi,
     private val errors: ApiErrorMapper,
     private val clock: Clock,
@@ -90,7 +92,11 @@ class DefaultScheduleRepository @Inject constructor(
      */
     override suspend fun postTimedInAtToday(): Long? {
         val (from, to) = todayBounds()
-        return attendance.firstTimeInBetween(from, to)?.checkpointId
+        // This guard's own Time In. The handset may still hold the last guard's, and treating theirs
+        // as this one's would pin a stationed guard to a post they never stood at.
+        val userId = profiles.observe().first()?.id ?: return null
+
+        return attendance.firstTimeInBetween(userId, from, to)?.checkpointId
     }
 
     private fun todayDate(): String =

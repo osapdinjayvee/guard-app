@@ -34,6 +34,14 @@ data class AttendanceEntity(
     /** Set on first successful sync. Null until then. */
     val serverId: Long? = null,
 
+    /**
+     * The guard this record belongs to.
+     *
+     * A handset is passed between shifts, and Room does not know that. This column has always been
+     * written; until now nothing *read* it, so every query returned every guard's records. The next
+     * guard to sign in inherited the last one's attendance — their history, their round, their Time
+     * In. That is not a display bug: it is one guard's evidence presented as another's.
+     */
     val userId: Long,
     val checkpointId: Long,
     /** Denormalised so History renders without a join. */

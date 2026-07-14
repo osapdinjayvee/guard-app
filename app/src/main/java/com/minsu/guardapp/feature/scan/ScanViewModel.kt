@@ -175,6 +175,14 @@ class ScanViewModel @Inject constructor(
                 "${config.timeInEarlyMinutes} minutes before your shift."
         }
 
+        // A patrol is movement. Scanning the same door twice in succession is a guard standing
+        // still, and it must not be a way to satisfy the round without walking it.
+        if (attendance.lastVisitedCheckpointToday() == checkpoint.id) {
+            types = types - AttendanceType.CHECKPOINT
+            notices += "You have just visited ${checkpoint.code}. Patrol another post before you " +
+                "scan this one again."
+        }
+
         // The round is every post, twice. Counted from this phone, so a guard finishing a patrol in
         // a dead spot is not stranded at the end of a shift by a rule that needs the network.
         if (duty.dutyType == DutyType.ROVING && config.minVisitsPerCheckpoint > 0) {

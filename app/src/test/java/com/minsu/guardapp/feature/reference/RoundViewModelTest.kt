@@ -188,6 +188,7 @@ class RoundViewModelTest {
             toMillis: Long,
         ): Flow<List<AttendanceRecord>> = MutableStateFlow(records)
         override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
+        override suspend fun lastVisitedCheckpointToday(): Long? = null
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
     }
 }

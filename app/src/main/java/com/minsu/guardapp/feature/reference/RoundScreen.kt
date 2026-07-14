@@ -36,6 +36,7 @@ import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
+import com.minsu.guardapp.domain.repository.SettingsRepository
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.ScreenTitle
 import com.minsu.guardapp.ui.theme.SyncSynced
@@ -50,14 +51,16 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
-/** One post on the round, and whether the guard has been to it on this date. */
+/** One post on the round, and how far through it the guard is on this date. */
 data class Stop(
     val checkpoint: Checkpoint,
-    /** Null until the guard scans it. */
-    val visitedAt: Long?,
-    val record: AttendanceRecord?,
+    val visits: Int,
+    val required: Int,
+    /** The most recent visit, or null if the post has not been reached at all. */
+    val lastVisitedAt: Long?,
 ) {
-    val isDone: Boolean get() = visitedAt != null
+    /** A post is not done at one visit. The round is every post, the required number of times. */
+    val isDone: Boolean get() = visits >= required
 }
 
 data class RoundUiState(
@@ -83,6 +86,7 @@ data class RoundUiState(
 class RoundViewModel @Inject constructor(
     checkpoints: CheckpointRepository,
     attendance: AttendanceRepository,
+    settings: SettingsRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -93,17 +97,25 @@ class RoundViewModel @Inject constructor(
         combine(
             checkpoints.observeActive(),
             attendance.observeInRange(from, from + DAY_MILLIS),
-        ) { posts, records ->
+            settings.observe(),
+        ) { posts, records, config ->
+            val required = config.minVisitsPerCheckpoint
+
             RoundUiState(
                 date = date,
                 stops = posts.map { post ->
-                    // A checkpoint scan on a roving round. Time In and Time Out are the bookends of
-                    // the shift, not stops on it, so they do not tick a post off.
-                    val visit = records.firstOrNull {
+                    // Checkpoint scans only. Time In and Time Out are the bookends of the shift, not
+                    // stops on the round, so they do not tick a post off.
+                    val visits = records.filter {
                         it.type == AttendanceType.CHECKPOINT &&
                             it.checkpointCode.equals(post.code, ignoreCase = true)
                     }
-                    Stop(checkpoint = post, visitedAt = visit?.capturedAt, record = visit)
+                    Stop(
+                        checkpoint = post,
+                        visits = visits.size,
+                        required = required,
+                        lastVisitedAt = visits.maxOfOrNull { it.capturedAt },
+                    )
                 },
                 timedInAt = records.firstOrNull { it.type == AttendanceType.TIME_IN }?.capturedAt,
                 timedOutAt = records.firstOrNull { it.type == AttendanceType.TIME_OUT }?.capturedAt,
@@ -154,7 +166,7 @@ private fun ProgressCard(state: RoundUiState) {
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            "${state.done} of ${state.total} posts scanned",
+            "${state.done} of ${state.total} posts complete",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -168,7 +180,8 @@ private fun ProgressCard(state: RoundUiState) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Counted from this phone, so it is right with no signal.",
+            "Every post needs ${state.stops.firstOrNull()?.required ?: 2} visits. " +
+                "Counted from this phone, so it is right with no signal.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -194,12 +207,23 @@ private fun StopRow(stop: Stop) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                stop.visitedAt?.let(::clockTime) ?: "Not yet",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (stop.isDone) SyncSynced else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // "1 of 2", not a tick. A post visited once looks identical to one never reached if all
+            // the row shows is done-or-not, and the guard has to go back to a post they half-did.
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "${stop.visits} of ${stop.required}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (stop.isDone) SyncSynced else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                stop.lastVisitedAt?.let {
+                    Text(
+                        clockTime(it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

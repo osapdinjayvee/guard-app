@@ -70,8 +70,13 @@ interface AttendanceRepository {
     /** Local records captured within [fromMillis, toMillis). The source for Reports. */
     fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>>
 
-    /** Patrol visits this guard has recorded today, from this device. Decides whether a round is walked. */
-    suspend fun checkpointVisitsToday(): Int
+    /**
+     * Visits per checkpoint today, from this device, keyed by checkpoint id.
+     *
+     * A post the guard has not reached is simply absent from the map. Decides whether the round is
+     * walked, and the rule is two visits to each post rather than two scans anywhere.
+     */
+    suspend fun checkpointVisitsToday(): Map<Long, Int>
 
     /**
      * Commits a captured attendance record to the local database, then requests a sync. The

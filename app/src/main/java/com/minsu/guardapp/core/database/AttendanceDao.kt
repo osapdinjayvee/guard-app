@@ -196,20 +196,29 @@ interface AttendanceDao {
     suspend fun firstTimeInBetween(fromMillis: Long, toMillis: Long): AttendanceEntity?
 
     /**
-     * Patrol visits recorded in a window — the round, as this phone knows it.
+     * Patrol visits per post in a window — the round, as this phone knows it.
      *
-     * Counted locally, not asked of the server: a guard finishing a round in a dead spot still has
-     * every scan on the handset, and gating their Time Out on a network call would strand them.
+     * Grouped by checkpoint, because the rule is two visits to *each* post rather than two scans
+     * anywhere. Counted locally, not asked of the server: a guard finishing a round in a dead spot
+     * still has every scan on the handset, and gating their Time Out on a network call would strand
+     * them at the end of a shift.
      */
     @Query(
         """
-        SELECT COUNT(*) FROM attendance
+        SELECT checkpointId AS checkpointId, COUNT(*) AS visits FROM attendance
         WHERE attendanceType = 'CHECKPOINT'
           AND capturedAt >= :fromMillis AND capturedAt < :toMillis
+        GROUP BY checkpointId
         """
     )
-    suspend fun countCheckpointVisitsBetween(fromMillis: Long, toMillis: Long): Int
+    suspend fun checkpointVisitCountsBetween(fromMillis: Long, toMillis: Long): List<CheckpointVisitCount>
 
     @Query("SELECT COUNT(*) FROM attendance")
     suspend fun count(): Int
 }
+
+/** One post and how many times it was visited. Projection for [AttendanceDao.checkpointVisitCountsBetween]. */
+data class CheckpointVisitCount(
+    val checkpointId: Long,
+    val visits: Int,
+)

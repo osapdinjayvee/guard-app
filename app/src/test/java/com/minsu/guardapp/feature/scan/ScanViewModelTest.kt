@@ -36,14 +36,16 @@ class ScanViewModelTest {
 
     private class FakeCheckpoints(
         private val resolutions: Map<String, CheckpointResolution> = emptyMap(),
+        /** The campus's active posts. The round rule measures against these, so they must be real. */
+        private val active: List<Checkpoint> = emptyList(),
     ) : CheckpointRepository {
         var resolveCalls = 0
         override suspend fun resolve(code: String): CheckpointResolution {
             resolveCalls++
             return resolutions[code] ?: CheckpointResolution.Unknown(code)
         }
-        override suspend fun byId(id: Long): Checkpoint? = null
-        override fun observeActive(): Flow<List<Checkpoint>> = MutableStateFlow(emptyList())
+        override suspend fun byId(id: Long): Checkpoint? = active.firstOrNull { it.id == id }
+        override fun observeActive(): Flow<List<Checkpoint>> = MutableStateFlow(active)
         override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 
@@ -81,6 +83,7 @@ class ScanViewModelTest {
     )
 
     private val gateA = Checkpoint(1, "GATE-A", "Main Gate", isActive = true, latitude = null, longitude = null)
+    private val clinic = Checkpoint(2, "CLINIC", "Clinic", isActive = true, latitude = null, longitude = null)
     private val roofOld = Checkpoint(4, "ROOF-OLD", "Rooftop", isActive = false, latitude = null, longitude = null)
 
     @Before fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -329,7 +332,7 @@ class ScanViewModelTest {
     private fun scanner(
         schedule: ScheduleRepository,
         checkpoints: CheckpointRepository,
-        visits: Int = 2,
+        visits: Map<Long, Int> = emptyMap(),
         settings: AppSettings = AppSettings(),
         nowMillis: Long = NOON,
     ) = ScanViewModel(
@@ -340,7 +343,7 @@ class ScanViewModelTest {
         clock = Clock { nowMillis },
     )
 
-    private class FakeAttendance(private val visits: Int) : AttendanceRepository {
+    private class FakeAttendance(private val visits: Map<Long, Int>) : AttendanceRepository {
         override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
@@ -349,7 +352,7 @@ class ScanViewModelTest {
         override suspend fun syncNow(): Int = 0
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
             MutableStateFlow(emptyList())
-        override suspend fun checkpointVisitsToday(): Int = visits
+        override suspend fun checkpointVisitsToday(): Map<Long, Int> = visits
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
     }
 
@@ -368,18 +371,23 @@ class ScanViewModelTest {
     // ---- The two rules that depend on when, not where -------------------------------------------
 
     /**
-     * A round with no posts in it is not a round.
+     * The round is every post, twice — not two scans anywhere.
      *
-     * Time Out is *removed* rather than shown and refused. A button whose only purpose is to reject
-     * you is a trap, and the notice says why it is gone — a guard shown fewer buttons and no reason
-     * has been told nothing.
+     * A post visited once is not done, and a post never reached is not excused by another post being
+     * finished. Time Out is *removed* rather than shown and refused: a button whose only purpose is
+     * to reject you is a trap. The notice names what is still owed, because a guard shown fewer
+     * buttons and no reason has been told nothing.
      */
     @Test
-    fun `a roving guard cannot time out before walking the round`() = runTest {
+    fun `a roving guard cannot time out until every post has its visits`() = runTest {
         val vm = scanner(
             schedule = roster(),
-            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
-            visits = 1,
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            // Gate A is done twice over; the Clinic has been reached once. The round is not walked.
+            visits = mapOf(gateA.id to 2, clinic.id to 1),
         )
 
         vm.onCodeScanned("GATE-A")
@@ -387,16 +395,19 @@ class ScanViewModelTest {
         val state = vm.state.value as ScanState.ChoosingType
         assertFalse(AttendanceType.TIME_OUT in state.allowedTypes)
         assertTrue(AttendanceType.CHECKPOINT in state.allowedTypes)
-        assertTrue(state.notice!!.contains("2 checkpoint visits"))
-        assertTrue(state.notice!!.contains("you have 1"))
+        assertTrue(state.notice!!.contains("CLINIC"))
+        assertFalse(state.notice!!.contains("GATE-A"))
     }
 
     @Test
-    fun `the round unlocks time out once the visits are in`() = runTest {
+    fun `the round unlocks time out once every post has its visits`() = runTest {
         val vm = scanner(
             schedule = roster(),
-            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
-            visits = 2,
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            visits = mapOf(gateA.id to 2, clinic.id to 2),
         )
 
         vm.onCodeScanned("GATE-A")
@@ -406,13 +417,16 @@ class ScanViewModelTest {
         assertNull(state.notice)
     }
 
-    /** The round rule is for roving guards. A stationed guard has no posts to visit. */
+    /** The round rule is for roving guards. A stationed guard has one post and no round to walk. */
     @Test
     fun `a stationed guard can time out without any checkpoint visits`() = runTest {
         val vm = scanner(
             schedule = stationed(),
-            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
-            visits = 0,
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            visits = emptyMap(),
         )
 
         vm.onCodeScanned("GATE-A")

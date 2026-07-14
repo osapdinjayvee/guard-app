@@ -65,7 +65,7 @@ fun MobileSettingsDto.toDomain() = AppSettings(
     imageQuality = imageQuality,
     imageMaxDimensionPx = imageMaxDimensionPx,
     timeInEarlyMinutes = timeInEarlyMinutes,
-    minCheckpointVisits = minCheckpointVisits,
+    minVisitsPerCheckpoint = minVisitsPerCheckpoint,
     maintenanceMessage = maintenanceMessage,
 )
 

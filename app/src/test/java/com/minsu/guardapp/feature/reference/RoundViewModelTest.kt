@@ -2,6 +2,7 @@ package com.minsu.guardapp.feature.reference
 
 import androidx.lifecycle.SavedStateHandle
 import com.minsu.guardapp.core.network.ApiResult
+import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.AttendanceType
@@ -10,6 +11,7 @@ import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.SyncState
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
+import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -37,17 +39,33 @@ class RoundViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
+    /**
+     * One visit is not a finished post. The round is every post, the required number of times, and a
+     * post visited once must not look identical to one that is done.
+     */
     @Test
-    fun `a scanned post is ticked off, an unscanned one is not`() = runTest {
+    fun `a post needs all its visits before it counts as done`() = runTest {
         val state = state(
             posts = listOf(post(1, "CP-MAIN-GATE"), post(2, "CP-LIBRARY")),
-            records = listOf(record(AttendanceType.CHECKPOINT, "CP-MAIN-GATE", at = 1_000L)),
+            records = listOf(
+                record(AttendanceType.CHECKPOINT, "CP-MAIN-GATE", at = 1_000L),
+                record(AttendanceType.CHECKPOINT, "CP-MAIN-GATE", at = 2_000L, id = "second"),
+                record(AttendanceType.CHECKPOINT, "CP-LIBRARY", at = 1_500L),
+            ),
         )
+
+        val gate = state.stops.first { it.checkpoint.code == "CP-MAIN-GATE" }
+        val library = state.stops.first { it.checkpoint.code == "CP-LIBRARY" }
+
+        assertEquals(2, gate.visits)
+        assertTrue(gate.isDone)
+        assertEquals(2_000L, gate.lastVisitedAt)
+
+        assertEquals(1, library.visits)
+        assertFalse(library.isDone)
 
         assertEquals(1, state.done)
         assertEquals(2, state.total)
-        assertEquals(1_000L, state.stops.first { it.checkpoint.code == "CP-MAIN-GATE" }.visitedAt)
-        assertFalse(state.stops.first { it.checkpoint.code == "CP-LIBRARY" }.isDone)
     }
 
     /**
@@ -63,17 +81,19 @@ class RoundViewModelTest {
         )
 
         assertEquals(0, state.done)
-        assertNull(state.stops.single().visitedAt)
+        assertEquals(0, state.stops.single().visits)
+        assertNull(state.stops.single().lastVisitedAt)
         assertEquals(500L, state.timedInAt)
     }
 
     /** A record still queued for upload is a scan that happened. The round does not wait on a server. */
     @Test
-    fun `an unsynced scan still counts as done`() = runTest {
+    fun `an unsynced scan still counts`() = runTest {
         val state = state(
             posts = listOf(post(1, "CP-CLINIC")),
             records = listOf(
                 record(AttendanceType.CHECKPOINT, "CP-CLINIC", at = 900L, sync = SyncState.PENDING),
+                record(AttendanceType.CHECKPOINT, "CP-CLINIC", at = 950L, sync = SyncState.PENDING, id = "b"),
             ),
         )
 
@@ -85,9 +105,13 @@ class RoundViewModelTest {
     fun `post codes match regardless of case`() = runTest {
         val state = state(
             posts = listOf(post(1, "CP-CLINIC")),
-            records = listOf(record(AttendanceType.CHECKPOINT, "cp-clinic", at = 700L)),
+            records = listOf(
+                record(AttendanceType.CHECKPOINT, "cp-clinic", at = 700L),
+                record(AttendanceType.CHECKPOINT, "CP-Clinic", at = 800L, id = "b"),
+            ),
         )
 
+        assertEquals(2, state.stops.single().visits)
         assertTrue(state.stops.single().isDone)
     }
 
@@ -98,6 +122,7 @@ class RoundViewModelTest {
         val viewModel = RoundViewModel(
             checkpoints = FakeCheckpoints(posts),
             attendance = FakeAttendance(records),
+            settings = FakeSettings,
             savedStateHandle = SavedStateHandle(mapOf("date" to "2026-07-13")),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -120,8 +145,9 @@ class RoundViewModelTest {
         code: String,
         at: Long,
         sync: SyncState = SyncState.SYNCED,
+        id: String = "a",
     ) = AttendanceRecord(
-        id = "$type-$code",
+        id = "$type-$code-$id",
         checkpointCode = code,
         type = type,
         capturedAt = at,
@@ -132,6 +158,12 @@ class RoundViewModelTest {
         syncState = sync,
         lastError = null,
     )
+
+    private object FakeSettings : SettingsRepository {
+        override fun observe(): Flow<AppSettings> = MutableStateFlow(AppSettings())
+        override suspend fun current(): AppSettings = AppSettings()
+        override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
+    }
 
     private class FakeCheckpoints(private val posts: List<Checkpoint>) : CheckpointRepository {
         override suspend fun resolve(code: String): CheckpointResolution =
@@ -155,8 +187,7 @@ class RoundViewModelTest {
             fromMillis: Long,
             toMillis: Long,
         ): Flow<List<AttendanceRecord>> = MutableStateFlow(records)
-        override suspend fun checkpointVisitsToday(): Int =
-            records.count { it.type == AttendanceType.CHECKPOINT }
+        override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
     }
 }

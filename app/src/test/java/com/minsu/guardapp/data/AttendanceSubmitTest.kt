@@ -45,11 +45,19 @@ class AttendanceSubmitTest {
                 it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.TIME_IN &&
                     it.capturedAt in fromMillis until toMillis
             }
-        override suspend fun countCheckpointVisitsBetween(fromMillis: Long, toMillis: Long): Int =
-            inserted.count {
-                it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.CHECKPOINT &&
-                    it.capturedAt in fromMillis until toMillis
-            }
+        override suspend fun checkpointVisitCountsBetween(
+            fromMillis: Long,
+            toMillis: Long,
+        ): List<com.minsu.guardapp.core.database.CheckpointVisitCount> =
+            inserted
+                .filter {
+                    it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.CHECKPOINT &&
+                        it.capturedAt in fromMillis until toMillis
+                }
+                .groupBy { it.checkpointId }
+                .map { (id, rows) ->
+                    com.minsu.guardapp.core.database.CheckpointVisitCount(id, rows.size)
+                }
         override suspend fun count() = inserted.size
     }
 

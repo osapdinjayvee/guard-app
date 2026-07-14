@@ -175,15 +175,25 @@ class ScanViewModel @Inject constructor(
                 "${config.timeInEarlyMinutes} minutes before your shift."
         }
 
-        // A round with no posts in it is not a round. Counted from this phone, so a guard finishing
-        // a patrol in a dead spot is not stranded by a rule that needs the network to check.
-        if (duty.dutyType == DutyType.ROVING && config.minCheckpointVisits > 0) {
+        // The round is every post, twice. Counted from this phone, so a guard finishing a patrol in
+        // a dead spot is not stranded at the end of a shift by a rule that needs the network.
+        if (duty.dutyType == DutyType.ROVING && config.minVisitsPerCheckpoint > 0) {
+            val required = config.minVisitsPerCheckpoint
             val visits = attendance.checkpointVisitsToday()
+            val posts = checkpoints.observeActive().first()
+            val outstanding = posts.filter { (visits[it.id] ?: 0) < required }
 
-            if (visits < config.minCheckpointVisits) {
+            if (posts.isNotEmpty() && outstanding.isNotEmpty()) {
                 types = types - AttendanceType.TIME_OUT
-                notices += "Time Out unlocks after ${config.minCheckpointVisits} checkpoint " +
-                    "visits — you have $visits."
+
+                // Names the posts still owed, not just a count. A guard told "4 of 6" at the end of
+                // an eight-hour shift has to work out which two they missed; a guard told "CLINIC,
+                // LIBRARY" can simply walk there.
+                val names = outstanding.take(3).joinToString(", ") { it.code }
+                val more = outstanding.size - minOf(3, outstanding.size)
+
+                notices += "Every post needs $required visits. Still to do: $names" +
+                    (if (more > 0) " and $more more." else ".")
             }
         }
 

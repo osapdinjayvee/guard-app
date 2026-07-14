@@ -196,7 +196,7 @@ class DefaultAttendanceRepository @Inject constructor(
      * the guard thinks it is, and bounding the day in UTC would push a late-evening visit in Manila
      * into tomorrow and lose it from tonight's round.
      */
-    override suspend fun checkpointVisitsToday(): Int {
+    override suspend fun checkpointVisitsToday(): Map<Long, Int> {
         val start = Calendar.getInstance().apply {
             timeInMillis = clock.nowMillis()
             set(Calendar.HOUR_OF_DAY, 0)
@@ -207,7 +207,8 @@ class DefaultAttendanceRepository @Inject constructor(
         val from = start.timeInMillis
         start.add(Calendar.DAY_OF_MONTH, 1)
 
-        return dao.countCheckpointVisitsBetween(from, start.timeInMillis)
+        return dao.checkpointVisitCountsBetween(from, start.timeInMillis)
+            .associate { it.checkpointId to it.visits }
     }
 
     override suspend fun submit(id: String, draft: AttendanceDraft) {

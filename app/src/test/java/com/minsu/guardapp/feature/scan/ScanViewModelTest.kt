@@ -73,7 +73,14 @@ class ScanViewModelTest {
         override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 
-    private fun roster() = FakeRoster()
+    /**
+     * The default roster: a roving guard who has already timed in.
+     *
+     * Timed in on purpose. A patrol cannot start before the shift does, so a guard with no Time In is
+     * offered no checkpoint visit — which is a state worth testing, but not the one most of these
+     * tests are about. The tests that care say so.
+     */
+    private fun roster() = FakeRoster(timedInAt = 1L)
 
     /** What the default (roving) roster permits. */
     private val ROVING_TYPES = listOf(
@@ -485,7 +492,9 @@ class ScanViewModelTest {
 
         val state = vm.state.value as ScanState.ChoosingType
         assertTrue(AttendanceType.TIME_IN in state.allowedTypes)
-        assertNull(state.notice)
+        // They have not timed in yet — that is the whole point of the test — so the patrol notice is
+        // expected. What must be absent is any complaint about being *early*.
+        assertFalse(state.notice!!.contains("Time In opens"))
     }
 
     private fun rosterStartingAt(startsAt: String) = FakeRoster(
@@ -572,6 +581,46 @@ class ScanViewModelTest {
         )
 
         vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertTrue(AttendanceType.CHECKPOINT in state.allowedTypes)
+    }
+
+    /**
+     * A patrol starts when the shift does.
+     *
+     * A checkpoint visit recorded before any Time In would be evidence of a round walked by a guard
+     * who had not clocked on — and it would count toward a round they were never on duty to walk.
+     */
+    @Test
+    fun `a checkpoint visit is not offered before the guard has timed in`() = runTest {
+        val vm = scanner(
+            schedule = FakeRoster(), // no Time In yet
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertFalse(AttendanceType.CHECKPOINT in state.allowedTypes)
+        assertTrue(AttendanceType.TIME_IN in state.allowedTypes)
+        assertTrue(state.notice!!.contains("Time In first"))
+    }
+
+    @Test
+    fun `a checkpoint visit is offered once the guard has timed in`() = runTest {
+        val vm = scanner(
+            schedule = FakeRoster(timedInAt = gateA.id),
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("CLINIC" to CheckpointResolution.Resolved(clinic)),
+                active = listOf(gateA, clinic),
+            ),
+        )
+
+        vm.onCodeScanned("CLINIC")
 
         val state = vm.state.value as ScanState.ChoosingType
         assertTrue(AttendanceType.CHECKPOINT in state.allowedTypes)

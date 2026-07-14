@@ -175,6 +175,13 @@ class ScanViewModel @Inject constructor(
                 "${config.timeInEarlyMinutes} minutes before your shift."
         }
 
+        // A patrol starts when the shift does. A checkpoint visit before any Time In would be
+        // evidence of a round walked by someone who, on paper, had not clocked on.
+        if (schedule.postTimedInAtToday() == null) {
+            types = types - AttendanceType.CHECKPOINT
+            notices += "Time In first — a patrol starts when your shift does."
+        }
+
         // A patrol is movement. Scanning the same door twice in succession is a guard standing
         // still, and it must not be a way to satisfy the round without walking it.
         if (attendance.lastVisitedCheckpointToday() == checkpoint.id) {

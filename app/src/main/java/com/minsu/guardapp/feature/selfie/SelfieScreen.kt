@@ -104,8 +104,12 @@ fun SelfieScreen(
 
                 captured != null -> CapturedPreview(
                     path = captured.absolutePath,
+                    // A Time Out goes on to the questions; everything else is being submitted, and
+                    // the button says so rather than promising a step that does not exist.
+                    continueLabel = if (state.needsEvaluation) "Continue" else "Submit",
+                    busy = state.isSubmitting,
                     onRetake = viewModel::retake,
-                    onContinue = viewModel::proceedToEvaluation,
+                    onContinue = viewModel::onPhotoAccepted,
                 )
 
                 else -> LiveCapture(state, viewModel, onCancel)
@@ -256,7 +260,13 @@ private fun formatDistance(metres: Float?): String = when {
 
 /** Step 1 after the shutter: is this photo good enough? Nothing else competes with that. */
 @Composable
-private fun CapturedPreview(path: String, onRetake: () -> Unit, onContinue: () -> Unit) {
+private fun CapturedPreview(
+    path: String,
+    continueLabel: String,
+    busy: Boolean,
+    onRetake: () -> Unit,
+    onContinue: () -> Unit,
+) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -294,6 +304,7 @@ private fun CapturedPreview(path: String, onRetake: () -> Unit, onContinue: () -
             }
             Button(
                 onClick = onContinue,
+                enabled = !busy,
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -301,7 +312,15 @@ private fun CapturedPreview(path: String, onRetake: () -> Unit, onContinue: () -
                 ),
                 modifier = Modifier.weight(1f).height(54.dp),
             ) {
-                Text("Continue", fontWeight = FontWeight.Bold)
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Text(continueLabel, fontWeight = FontWeight.Bold)
+                }
             }
         }
         Spacer(Modifier.height(16.dp))

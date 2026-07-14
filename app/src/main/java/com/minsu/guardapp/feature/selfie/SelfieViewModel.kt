@@ -302,8 +302,22 @@ class SelfieViewModel @Inject constructor(
         state.copy(answers = state.answers - lastAnswered.id)
     }
 
-    /** The photo is accepted; on to the questions — or straight to submit, if there are none. */
-    fun proceedToEvaluation() = _uiState.update { it.copy(onEvaluationStep = true) }
+    /**
+     * The photo is accepted. Only a Time Out has anything left to ask.
+     *
+     * A Time In and a checkpoint visit went through the evaluation screen too. There were no
+     * questions to put, so it rendered as a bare review page headed "End of shift" — shown to a
+     * guard who had just *started* one — with a Submit button under it. A step that asks nothing is
+     * not a step; it is a second button for the same decision, and a confusing one.
+     */
+    fun onPhotoAccepted() {
+        if (!_uiState.value.needsEvaluation) {
+            submit()
+            return
+        }
+
+        _uiState.update { it.copy(onEvaluationStep = true) }
+    }
 
     /** Back to the photo, without discarding it or the answers already given. */
     fun backToPhoto() = _uiState.update { it.copy(onEvaluationStep = false) }

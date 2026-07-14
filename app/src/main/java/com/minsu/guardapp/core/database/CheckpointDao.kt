@@ -2,6 +2,7 @@ package com.minsu.guardapp.core.database
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -36,6 +37,22 @@ interface CheckpointDao {
     /** Used to name the post a stationed guard timed in at, from its id alone. */
     @Query("SELECT * FROM checkpoints WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): CheckpointEntity?
+
+    @Query("DELETE FROM checkpoints")
+    suspend fun clear()
+
+    /**
+     * Swap the cached list for the server's, in one transaction.
+     *
+     * Not a delete followed by an insert from the caller: between the two, a guard scanning a QR
+     * would resolve against an empty table and be told their checkpoint does not exist. Inside a
+     * transaction, nobody ever sees the gap.
+     */
+    @Transaction
+    suspend fun replaceAll(checkpoints: List<CheckpointEntity>) {
+        clear()
+        upsertAll(checkpoints)
+    }
 
     @Query("SELECT COUNT(*) FROM checkpoints")
     suspend fun count(): Int

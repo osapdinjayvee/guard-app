@@ -48,6 +48,10 @@ class CheckpointRepositoryTest {
             rows.map { list -> list.filter { it.status == "ACTIVE" } }
         override suspend fun findById(id: Long): CheckpointEntity? =
             rows.value.firstOrNull { it.id == id }
+        override suspend fun clear() { rows.value = emptyList() }
+        override suspend fun replaceAll(checkpoints: List<CheckpointEntity>) {
+            rows.value = checkpoints
+        }
         override suspend fun count(): Int = rows.value.size
     }
 
@@ -178,5 +182,35 @@ class CheckpointRepositoryTest {
         assertTrue(result is ApiResult.Failure)
         assertEquals("cache survived", 1, dao.count())
         assertTrue(repository.resolve("GATE-A") is CheckpointResolution.Resolved)
+    }
+
+    /**
+     * A checkpoint the office retires must leave the phone.
+     *
+     * Upserting alone only ever adds, so a stale post kept resolving on a scan and kept padding the
+     * round — a guard was shown "1 of 15 posts scanned" at a campus with six.
+     */
+    @Test
+    fun `a refresh replaces the cached list rather than adding to it`() = runTest {
+        dao.upsertAll(listOf(dto(9, "OLD-POST", "ACTIVE").toEntity(0)))
+
+        repo(object : FakeGuardApi() {
+            override suspend fun checkpoints(): Envelope<List<CheckpointDto>> =
+                Envelope(listOf(dto(1, "GATE-A", "ACTIVE")))
+        }).refresh()
+
+        assertEquals(listOf("GATE-A"), dao.rows.value.map { it.code })
+    }
+
+    /** A failed refresh must not empty the cache: a stale checkpoint beats no checkpoint. */
+    @Test
+    fun `a failed refresh leaves the cached list alone`() = runTest {
+        dao.upsertAll(listOf(dto(1, "GATE-A", "ACTIVE").toEntity(0)))
+
+        repo(object : FakeGuardApi() {
+            override suspend fun checkpoints(): Envelope<List<CheckpointDto>> = throw IOException("offline")
+        }).refresh()
+
+        assertEquals(listOf("GATE-A"), dao.rows.value.map { it.code })
     }
 }

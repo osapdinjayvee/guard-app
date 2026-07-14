@@ -92,12 +92,22 @@ class DefaultCheckpointRepository @Inject constructor(
         dao.observeActive().map { entities -> entities.map { it.toDomain() } }
 
     /** A failed refresh leaves the cache untouched: stale checkpoints beat none. */
+    /**
+     * The checkpoint list is *replaced*, not merged.
+     *
+     * Upserting alone only ever adds. A post the office retires, or one that belongs to a campus
+     * this guard has left, stays on the phone forever: it keeps resolving on a scan, and it keeps
+     * padding the round — a guard was being told "1 of 15 posts scanned" when the campus has six.
+     *
+     * A failed refresh leaves the previous list alone. A stale checkpoint beats no checkpoint: a
+     * guard who cannot resolve a scan cannot record their attendance at all.
+     */
     override suspend fun refresh(): ApiResult<Unit> =
         errors.call { api.checkpoints().data }
             .also { result ->
                 if (result is ApiResult.Success) {
                     val now = clock.nowMillis()
-                    dao.upsertAll(result.value.map { it.toEntity(now) })
+                    dao.replaceAll(result.value.map { it.toEntity(now) })
                 }
             }
             .map { }

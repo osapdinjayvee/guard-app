@@ -9,6 +9,7 @@ import com.minsu.guardapp.core.location.LocationFix
 import com.minsu.guardapp.core.location.LocationProvider
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceDraft
+import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.Duty
@@ -66,15 +67,38 @@ data class SelfieUiState(
     val questions: List<EvaluationQuestion> = emptyList(),
     /** Answers so far, keyed by question. One question is put at a time; this is what has been said. */
     val answers: Map<Long, Boolean> = emptyMap(),
+    /**
+     * The server said there are no questions. Told apart from "this phone has not downloaded them".
+     *
+     * Both look like an empty list and they mean opposite things. If the office has retired every
+     * question, a guard must still be able to close their shift. If the phone simply never fetched
+     * them, submitting would produce a Time Out the server rejects for carrying no answers. Guess
+     * wrong one way and the guard is stranded; guess wrong the other and the evidence is lost.
+     */
+    val questionsKnownEmpty: Boolean = false,
     /** True once the photo is accepted and the guard has moved on to the questions. */
     val onEvaluationStep: Boolean = false,
     val isSubmitting: Boolean = false,
     val submitted: Boolean = false,
     val error: String? = null,
 ) {
-    /** A Time Out is the only capture that carries an evaluation, because it is the only ending. */
+    /**
+     * A Time Out is the only capture that carries an evaluation, because it is the only ending.
+     *
+     * Note what this does *not* say: `&& questions.isNotEmpty()`. It used to, and that was a hole.
+     * A phone with no cached questions concluded that no evaluation was needed, submitted a Time Out
+     * with none — and the server, which requires them on every Time Out, rejected it permanently.
+     * The guard saw a shift they could not close and no reason why.
+     *
+     * A Time Out needs an evaluation whether or not this handset happens to have the questions. If
+     * it does not have them, that is a problem to say out loud, not to answer by skipping the step.
+     */
     val needsEvaluation: Boolean
-        get() = type == AttendanceType.TIME_OUT && questions.isNotEmpty()
+        get() = type == AttendanceType.TIME_OUT
+
+    /** A Time Out with nothing to ask, and no way to know whether that is real. Blocked, and said. */
+    val missingQuestions: Boolean
+        get() = needsEvaluation && questions.isEmpty() && !questionsKnownEmpty
 
     /** The question currently being put to the guard, or null when they have answered them all. */
     val currentQuestion: EvaluationQuestion?
@@ -91,7 +115,13 @@ data class SelfieUiState(
      * one; so does this.
      */
     val evaluationComplete: Boolean
-        get() = !needsEvaluation || questions.all { it.id in answers }
+        get() = when {
+            !needsEvaluation -> true
+            // Genuinely nothing to ask: the office retired every question. Not a reason to leave a
+            // guard unable to clock out of a shift they have finished.
+            questions.isEmpty() -> questionsKnownEmpty
+            else -> questions.all { it.id in answers }
+        }
 
     val canSubmit: Boolean
         get() = capturedFile != null && evaluationComplete && !isSubmitting && !submitted
@@ -204,6 +234,26 @@ class SelfieViewModel @Inject constructor(
                     // the end of a shift at a perimeter post with no signal.
                     questions = if (type == AttendanceType.TIME_OUT) evaluations.questions() else emptyList(),
                     nowMillis = clock.nowMillis(),
+                )
+            }
+        }
+
+        // An empty question cache on a Time Out is recoverable while there is still a signal, and
+        // this is the last moment anyone is looking. Try once; if it fails, the guard is told plainly
+        // rather than being walked into a submission the server will refuse.
+        viewModelScope.launch {
+            if (type != AttendanceType.TIME_OUT) return@launch
+            if (evaluations.questions().isNotEmpty()) return@launch
+
+            // A successful refresh that comes back empty is an *answer*: this campus asks nothing.
+            // A failed one tells us only that we still do not know.
+            val refreshed = evaluations.refresh()
+            val questions = evaluations.questions()
+
+            _uiState.update {
+                it.copy(
+                    questions = questions,
+                    questionsKnownEmpty = refreshed is ApiResult.Success && questions.isEmpty(),
                 )
             }
         }

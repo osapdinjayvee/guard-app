@@ -6,14 +6,21 @@ import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.DutyAssignment
+import com.minsu.guardapp.core.common.Clock
+import com.minsu.guardapp.domain.model.DutyType
+import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
+import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 sealed interface ScanState {
@@ -26,11 +33,15 @@ sealed interface ScanState {
      * Resolved, active, and allowed. The guard now picks a type.
      *
      * [allowedTypes] comes from the duty roster: a stationed guard is offered Time In and Time Out
-     * alone, and a roving guard is also offered a Checkpoint visit.
+     * alone, and a roving guard is also offered a Checkpoint visit. A type the roster rules forbid
+     * *right now* is removed rather than shown and refused — a button that exists only to reject you
+     * is a trap — and [notice] says why it is missing, because a guard who is simply shown fewer
+     * buttons has been told nothing.
      */
     data class ChoosingType(
         val checkpoint: Checkpoint,
         val allowedTypes: List<AttendanceType>,
+        val notice: String? = null,
     ) : ScanState
 
     /** Checkpoint and type settled; the selfie step follows. */
@@ -64,6 +75,9 @@ sealed interface ScanState {
 class ScanViewModel @Inject constructor(
     private val checkpoints: CheckpointRepository,
     private val schedule: ScheduleRepository,
+    private val attendance: AttendanceRepository,
+    private val settings: SettingsRepository,
+    private val clock: Clock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ScanState>(ScanState.Scanning)
@@ -117,7 +131,7 @@ class ScanViewModel @Inject constructor(
         // return to.
         val post = schedule.postTimedInAtToday()
 
-        if (duty.dutyType == com.minsu.guardapp.domain.model.DutyType.STATIONED &&
+        if (duty.dutyType == DutyType.STATIONED &&
             post != null &&
             post != checkpoint.id
         ) {
@@ -125,8 +139,76 @@ class ScanViewModel @Inject constructor(
             return ScanState.WrongPost(scanned = checkpoint, timedInAt = timedInAt)
         }
 
-        return ScanState.ChoosingType(checkpoint, duty.allowedTypes)
+        return withTimeRules(checkpoint, duty)
     }
+
+    /**
+     * The two rules that depend on *when*, rather than *where*.
+     *
+     * Both are checked here, before the camera opens, and again by the server on submission. The
+     * server is the authority; this is the kindness. A guard who learns their Time In was too early
+     * from a rejection that lands after the shift has ended has already taken the selfie, walked
+     * away, and can do nothing about it.
+     */
+    private suspend fun withTimeRules(checkpoint: Checkpoint, duty: DutyAssignment): ScanState {
+        val config = settings.current()
+        val now = clock.nowMillis()
+
+        var types = duty.allowedTypes
+        val notices = mutableListOf<String>()
+
+        // A shift cannot be opened long before it starts. Turning up an hour early and timing in
+        // does not make the shift an hour longer. Lateness is not capped — the late timestamp is
+        // itself the evidence, and refusing it would leave the shift with no record at all.
+        val opensAt = shiftOpensAt(duty, config.timeInEarlyMinutes)
+
+        if (opensAt != null && now < opensAt) {
+            types = types - AttendanceType.TIME_IN
+            notices += "Time In opens at ${clockTime(opensAt)}, " +
+                "${config.timeInEarlyMinutes} minutes before your shift."
+        }
+
+        // A round with no posts in it is not a round. Counted from this phone, so a guard finishing
+        // a patrol in a dead spot is not stranded by a rule that needs the network to check.
+        if (duty.dutyType == DutyType.ROVING && config.minCheckpointVisits > 0) {
+            val visits = attendance.checkpointVisitsToday()
+
+            if (visits < config.minCheckpointVisits) {
+                types = types - AttendanceType.TIME_OUT
+                notices += "Time Out unlocks after ${config.minCheckpointVisits} checkpoint " +
+                    "visits — you have $visits."
+            }
+        }
+
+        return ScanState.ChoosingType(
+            checkpoint = checkpoint,
+            allowedTypes = types,
+            notice = notices.joinToString(" ").ifBlank { null },
+        )
+    }
+
+    /**
+     * When the guard may first time in: the shift's start, less the grace window.
+     *
+     * Null when the roster gives no start time, which means there is nothing to be early for and the
+     * rule cannot be applied — better to let the guard record their attendance than to block them on
+     * a roster the office left half-filled.
+     */
+    private fun shiftOpensAt(duty: DutyAssignment, earlyMinutes: Int): Long? {
+        val startsAt = duty.startsAt ?: return null
+
+        return runCatching {
+            val parsed = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                .parse("${duty.date} ${startsAt.padTime()}")!!
+            parsed.time - earlyMinutes * 60_000L
+        }.getOrNull()
+    }
+
+    /** `23:00` and `23:00:00` both arrive from the roster; only one of them parses. */
+    private fun String.padTime(): String = if (length == 5) "$this:00" else this
+
+    private fun clockTime(millis: Long): String =
+        SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
 
     /** Only reachable from [ScanState.ChoosingType]: a type without a checkpoint is meaningless. */
     fun onTypeChosen(type: AttendanceType) {

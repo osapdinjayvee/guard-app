@@ -141,6 +141,7 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                         checkpointName = current.checkpoint.name,
                         checkpointCode = current.checkpoint.code,
                         allowedTypes = current.allowedTypes,
+                        notice = current.notice,
                         onChoose = viewModel::onTypeChosen,
                         onCancel = viewModel::scanAgain,
                     )
@@ -268,6 +269,7 @@ private fun TypeChoice(
     checkpointName: String,
     checkpointCode: String,
     allowedTypes: List<AttendanceType>,
+    notice: String?,
     onChoose: (AttendanceType) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -306,6 +308,24 @@ private fun TypeChoice(
         // narrow to fit: it wrapped to two lines inside a fixed-height button and came out taller
         // and misshapen next to the others. Full-width rows fit any label at any font scale, and a
         // gloved thumb in the dark wants the bigger target anyway.
+        // Why a button they expected is not there. Shown above the buttons, not below: a guard who
+        // has already tapped has stopped reading.
+        if (notice != null) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = SyncPending.copy(alpha = 0.12f),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             allowedTypes.forEachIndexed { index, type ->
                 TypeButton(

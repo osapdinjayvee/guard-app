@@ -70,6 +70,9 @@ interface AttendanceRepository {
     /** Local records captured within [fromMillis, toMillis). The source for Reports. */
     fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>>
 
+    /** Patrol visits this guard has recorded today, from this device. Decides whether a round is walked. */
+    suspend fun checkpointVisitsToday(): Int
+
     /**
      * Commits a captured attendance record to the local database, then requests a sync. The
      * record is durable the instant this returns — the write is local-first, never

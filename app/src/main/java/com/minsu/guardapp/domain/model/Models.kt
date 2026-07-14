@@ -86,6 +86,10 @@ data class AppSettings(
     val gpsTimeoutSeconds: Int = 15,
     val imageQuality: Int = 80,
     val imageMaxDimensionPx: Int = 1600,
+    /** How early a guard may open a shift. Only earliness is capped; a late Time In still records. */
+    val timeInEarlyMinutes: Int = 15,
+    /** Checkpoint visits a roving guard must record before they can close the shift. */
+    val minCheckpointVisits: Int = 2,
     val maintenanceMessage: String? = null,
 )
 

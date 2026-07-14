@@ -32,6 +32,8 @@ class DataStoreSettingsCache @Inject constructor(
             gpsTimeoutSeconds = prefs[TIMEOUT] ?: defaults.gpsTimeoutSeconds,
             imageQuality = prefs[QUALITY] ?: defaults.imageQuality,
             imageMaxDimensionPx = prefs[MAX_DIMENSION] ?: defaults.imageMaxDimensionPx,
+            timeInEarlyMinutes = prefs[EARLY_MINUTES] ?: defaults.timeInEarlyMinutes,
+            minCheckpointVisits = prefs[MIN_VISITS] ?: defaults.minCheckpointVisits,
             maintenanceMessage = prefs[MAINTENANCE],
         )
     }
@@ -43,6 +45,8 @@ class DataStoreSettingsCache @Inject constructor(
             prefs[TIMEOUT] = settings.gpsTimeoutSeconds
             prefs[QUALITY] = settings.imageQuality
             prefs[MAX_DIMENSION] = settings.imageMaxDimensionPx
+            prefs[EARLY_MINUTES] = settings.timeInEarlyMinutes
+            prefs[MIN_VISITS] = settings.minCheckpointVisits
             settings.maintenanceMessage
                 ?.let { prefs[MAINTENANCE] = it }
                 ?: prefs.remove(MAINTENANCE)
@@ -55,6 +59,8 @@ class DataStoreSettingsCache @Inject constructor(
         val TIMEOUT = intPreferencesKey("gps_timeout_seconds")
         val QUALITY = intPreferencesKey("image_quality")
         val MAX_DIMENSION = intPreferencesKey("image_max_dimension_px")
+        val EARLY_MINUTES = intPreferencesKey("time_in_early_minutes")
+        val MIN_VISITS = intPreferencesKey("min_checkpoint_visits")
         val MAINTENANCE = stringPreferencesKey("maintenance_message")
     }
 }

@@ -29,6 +29,7 @@ import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -179,6 +180,25 @@ class DefaultAttendanceRepository @Inject constructor(
 
     override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
         dao.observeInRange(fromMillis, toMillis).map { entities -> entities.map { it.toDomain() } }
+
+    /**
+     * Midnight to midnight in the guard's own timezone, not UTC's — a 23:50 scan belongs to the day
+     * the guard thinks it is, and bounding the day in UTC would push a late-evening visit in Manila
+     * into tomorrow and lose it from tonight's round.
+     */
+    override suspend fun checkpointVisitsToday(): Int {
+        val start = Calendar.getInstance().apply {
+            timeInMillis = clock.nowMillis()
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val from = start.timeInMillis
+        start.add(Calendar.DAY_OF_MONTH, 1)
+
+        return dao.countCheckpointVisitsBetween(from, start.timeInMillis)
+    }
 
     override suspend fun submit(id: String, draft: AttendanceDraft) {
         val now = clock.nowMillis()

@@ -46,6 +46,8 @@ data class MobileSettingsDto(
     @Json(name = "gps_timeout_seconds") val gpsTimeoutSeconds: Int = 15,
     @Json(name = "image_quality") val imageQuality: Int = 80,
     @Json(name = "image_max_dimension_px") val imageMaxDimensionPx: Int = 1600,
+    @Json(name = "time_in_early_minutes") val timeInEarlyMinutes: Int = 15,
+    @Json(name = "min_checkpoint_visits") val minCheckpointVisits: Int = 2,
     @Json(name = "maintenance_message") val maintenanceMessage: String? = null,
 )
 

@@ -1,23 +1,32 @@
 package com.minsu.guardapp.feature.scan
 
+import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.core.network.ApiResult
+import com.minsu.guardapp.domain.model.AppSettings
+import com.minsu.guardapp.domain.model.AttendanceDraft
+import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
+import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
+import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -79,12 +88,12 @@ class ScanViewModelTest {
 
     @Test
     fun `starts scanning`() = runTest {
-        assertEquals(ScanState.Scanning, ScanViewModel(schedule = roster(), checkpoints = FakeCheckpoints()).state.value)
+        assertEquals(ScanState.Scanning, scanner(schedule = roster(), checkpoints = FakeCheckpoints()).state.value)
     }
 
     @Test
     fun `an active checkpoint moves straight to type selection`() = runTest {
-        val vm = ScanViewModel(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))))
+        val vm = scanner(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))))
 
         vm.onCodeScanned("GATE-A")
 
@@ -94,7 +103,7 @@ class ScanViewModelTest {
     /** A retired checkpoint must not read as "unrecognised code". */
     @Test
     fun `a disabled checkpoint is reported as retired, not unknown`() = runTest {
-        val vm = ScanViewModel(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("ROOF-OLD" to CheckpointResolution.Disabled(roofOld))))
+        val vm = scanner(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("ROOF-OLD" to CheckpointResolution.Disabled(roofOld))))
 
         vm.onCodeScanned("ROOF-OLD")
 
@@ -103,7 +112,7 @@ class ScanViewModelTest {
 
     @Test
     fun `an unknown code is reported as unknown`() = runTest {
-        val vm = ScanViewModel(schedule = roster(), checkpoints = FakeCheckpoints())
+        val vm = scanner(schedule = roster(), checkpoints = FakeCheckpoints())
 
         vm.onCodeScanned("NOT-A-CODE")
 
@@ -117,7 +126,7 @@ class ScanViewModelTest {
     @Test
     fun `further scans are ignored until the guard dismisses the result`() = runTest {
         val repo = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)))
-        val vm = ScanViewModel(checkpoints = repo, schedule = roster())
+        val vm = scanner(checkpoints = repo, schedule = roster())
 
         vm.onCodeScanned("GATE-A")
         vm.onCodeScanned("GATE-A")
@@ -130,7 +139,7 @@ class ScanViewModelTest {
     @Test
     fun `scan again re-arms the scanner`() = runTest {
         val repo = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)))
-        val vm = ScanViewModel(checkpoints = repo, schedule = roster())
+        val vm = scanner(checkpoints = repo, schedule = roster())
         vm.onCodeScanned("GATE-A")
 
         vm.scanAgain()
@@ -142,7 +151,7 @@ class ScanViewModelTest {
 
     @Test
     fun `choosing a type carries the checkpoint forward`() = runTest {
-        val vm = ScanViewModel(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))))
+        val vm = scanner(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))))
         vm.onCodeScanned("GATE-A")
 
         vm.onTypeChosen(AttendanceType.TIME_OUT)
@@ -153,7 +162,7 @@ class ScanViewModelTest {
     /** A type without a resolved checkpoint is meaningless and must not be reachable. */
     @Test
     fun `choosing a type while still scanning is ignored`() = runTest {
-        val vm = ScanViewModel(schedule = roster(), checkpoints = FakeCheckpoints())
+        val vm = scanner(schedule = roster(), checkpoints = FakeCheckpoints())
 
         vm.onTypeChosen(AttendanceType.TIME_IN)
 
@@ -162,7 +171,7 @@ class ScanViewModelTest {
 
     @Test
     fun `choosing a type on a disabled checkpoint is ignored`() = runTest {
-        val vm = ScanViewModel(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("ROOF-OLD" to CheckpointResolution.Disabled(roofOld))))
+        val vm = scanner(schedule = roster(), checkpoints = FakeCheckpoints(mapOf("ROOF-OLD" to CheckpointResolution.Disabled(roofOld))))
         vm.onCodeScanned("ROOF-OLD")
 
         vm.onTypeChosen(AttendanceType.TIME_IN)
@@ -201,7 +210,7 @@ class ScanViewModelTest {
      */
     @Test
     fun `a stationed guard is offered Time In and Time Out, and never a patrol visit`() = runTest {
-        val vm = ScanViewModel(
+        val vm = scanner(
             checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
             schedule = stationed(),
         )
@@ -219,7 +228,7 @@ class ScanViewModelTest {
      */
     @Test
     fun `a stationed guard who has not timed in may scan any checkpoint`() = runTest {
-        val vm = ScanViewModel(
+        val vm = scanner(
             checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
             schedule = stationed(timedInAt = null),
         )
@@ -238,7 +247,7 @@ class ScanViewModelTest {
     @Test
     fun `a stationed guard is stopped at a checkpoint they did not time in at`() = runTest {
         val library = Checkpoint(9, "CP-LIBRARY", "Library", isActive = true, latitude = null, longitude = null)
-        val vm = ScanViewModel(
+        val vm = scanner(
             checkpoints = NamingCheckpoints(
                 resolutions = mapOf("CP-LIBRARY" to CheckpointResolution.Resolved(library)),
                 byId = mapOf(1L to gateA),
@@ -256,7 +265,7 @@ class ScanViewModelTest {
     /** Scanning the post they timed in at is exactly what a stationed guard is supposed to do. */
     @Test
     fun `a stationed guard may scan the post they timed in at`() = runTest {
-        val vm = ScanViewModel(
+        val vm = scanner(
             checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
             schedule = stationed(timedInAt = gateA.id),
         )
@@ -270,7 +279,7 @@ class ScanViewModelTest {
     @Test
     fun `a roving guard may scan a checkpoint other than the one they timed in at`() = runTest {
         val library = Checkpoint(9, "CP-LIBRARY", "Library", isActive = true, latitude = null, longitude = null)
-        val vm = ScanViewModel(
+        val vm = scanner(
             checkpoints = FakeCheckpoints(mapOf("CP-LIBRARY" to CheckpointResolution.Resolved(library))),
             schedule = FakeRoster(timedInAt = gateA.id),
         )
@@ -284,7 +293,7 @@ class ScanViewModelTest {
     /** A rest day is not an error, and must not be worded as one. */
     @Test
     fun `a guard with no shift today is told so, not shown a scanner error`() = runTest {
-        val vm = ScanViewModel(
+        val vm = scanner(
             checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
             schedule = FakeRoster(duty = null),
         )
@@ -301,7 +310,7 @@ class ScanViewModelTest {
      */
     @Test
     fun `an unlinked account is named as an admin problem, not a rest day`() = runTest {
-        val vm = ScanViewModel(
+        val vm = scanner(
             checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
             schedule = FakeRoster(linked = false),
         )
@@ -310,4 +319,167 @@ class ScanViewModelTest {
 
         assertEquals(ScanState.NotOnRoster, vm.state.value)
     }
+
+    /**
+     * The ViewModel under test, with the time-based collaborators supplied.
+     *
+     * `visits` defaults to the minimum, so the tests that are not about the round see the roster's
+     * full set of types. The ones that *are* about it say so.
+     */
+    private fun scanner(
+        schedule: ScheduleRepository,
+        checkpoints: CheckpointRepository,
+        visits: Int = 2,
+        settings: AppSettings = AppSettings(),
+        nowMillis: Long = NOON,
+    ) = ScanViewModel(
+        checkpoints = checkpoints,
+        schedule = schedule,
+        attendance = FakeAttendance(visits),
+        settings = FakeSettings(settings),
+        clock = Clock { nowMillis },
+    )
+
+    private class FakeAttendance(private val visits: Int) : AttendanceRepository {
+        override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
+        override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
+        override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
+        override suspend fun retry(id: String) = Unit
+        override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
+        override suspend fun syncNow(): Int = 0
+        override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
+            MutableStateFlow(emptyList())
+        override suspend fun checkpointVisitsToday(): Int = visits
+        override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
+    }
+
+    private class FakeSettings(private val settings: AppSettings) : SettingsRepository {
+        override fun observe(): Flow<AppSettings> = MutableStateFlow(settings)
+        override suspend fun current(): AppSettings = settings
+        override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
+    }
+
+    private companion object {
+        /** 2026-07-12, midday, device timezone. The roster fixtures are dated the same day. */
+        val NOON: Long = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+            .parse("2026-07-12 12:00")!!.time
+    }
+
+    // ---- The two rules that depend on when, not where -------------------------------------------
+
+    /**
+     * A round with no posts in it is not a round.
+     *
+     * Time Out is *removed* rather than shown and refused. A button whose only purpose is to reject
+     * you is a trap, and the notice says why it is gone — a guard shown fewer buttons and no reason
+     * has been told nothing.
+     */
+    @Test
+    fun `a roving guard cannot time out before walking the round`() = runTest {
+        val vm = scanner(
+            schedule = roster(),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+            visits = 1,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertFalse(AttendanceType.TIME_OUT in state.allowedTypes)
+        assertTrue(AttendanceType.CHECKPOINT in state.allowedTypes)
+        assertTrue(state.notice!!.contains("2 checkpoint visits"))
+        assertTrue(state.notice!!.contains("you have 1"))
+    }
+
+    @Test
+    fun `the round unlocks time out once the visits are in`() = runTest {
+        val vm = scanner(
+            schedule = roster(),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+            visits = 2,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertEquals(ROVING_TYPES, state.allowedTypes)
+        assertNull(state.notice)
+    }
+
+    /** The round rule is for roving guards. A stationed guard has no posts to visit. */
+    @Test
+    fun `a stationed guard can time out without any checkpoint visits`() = runTest {
+        val vm = scanner(
+            schedule = stationed(),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+            visits = 0,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertTrue(AttendanceType.TIME_OUT in state.allowedTypes)
+    }
+
+    /** Turning up an hour early and timing in does not make the shift an hour longer. */
+    @Test
+    fun `time in is not offered before the shift opens`() = runTest {
+        val vm = scanner(
+            schedule = rosterStartingAt("14:00:00"),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+            nowMillis = at("2026-07-12 13:30"), // 30 minutes out; the window opens at 13:45
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertFalse(AttendanceType.TIME_IN in state.allowedTypes)
+        assertTrue(state.notice!!.contains("1:45 PM"))
+    }
+
+    @Test
+    fun `time in opens fifteen minutes before the shift`() = runTest {
+        val vm = scanner(
+            schedule = rosterStartingAt("14:00:00"),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+            nowMillis = at("2026-07-12 13:45"),
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        assertTrue(AttendanceType.TIME_IN in (vm.state.value as ScanState.ChoosingType).allowedTypes)
+    }
+
+    /**
+     * Lateness is not capped, and must not be. The late timestamp is itself the evidence — refusing
+     * it would leave the shift with no record at all, which serves neither the guard nor the office.
+     */
+    @Test
+    fun `a late guard can still time in`() = runTest {
+        val vm = scanner(
+            schedule = rosterStartingAt("14:00:00"),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+            nowMillis = at("2026-07-12 16:20"), // two hours late
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertTrue(AttendanceType.TIME_IN in state.allowedTypes)
+        assertNull(state.notice)
+    }
+
+    private fun rosterStartingAt(startsAt: String) = FakeRoster(
+        duty = DutyAssignment(
+            date = "2026-07-12",
+            dutyType = DutyType.ROVING,
+            dutyName = "Roving Guard",
+            startsAt = startsAt,
+            endsAt = null,
+            totalHours = 8f,
+        ),
+    )
+
+    private fun at(wallClock: String): Long =
+        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).parse(wallClock)!!.time
 }

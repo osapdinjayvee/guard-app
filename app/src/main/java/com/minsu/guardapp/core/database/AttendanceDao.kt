@@ -195,6 +195,21 @@ interface AttendanceDao {
     )
     suspend fun firstTimeInBetween(fromMillis: Long, toMillis: Long): AttendanceEntity?
 
+    /**
+     * Patrol visits recorded in a window — the round, as this phone knows it.
+     *
+     * Counted locally, not asked of the server: a guard finishing a round in a dead spot still has
+     * every scan on the handset, and gating their Time Out on a network call would strand them.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM attendance
+        WHERE attendanceType = 'CHECKPOINT'
+          AND capturedAt >= :fromMillis AND capturedAt < :toMillis
+        """
+    )
+    suspend fun countCheckpointVisitsBetween(fromMillis: Long, toMillis: Long): Int
+
     @Query("SELECT COUNT(*) FROM attendance")
     suspend fun count(): Int
 }

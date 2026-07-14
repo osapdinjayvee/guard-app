@@ -334,6 +334,34 @@ private fun ShiftEvaluation(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 4.dp),
     ) {
+        /*
+         * No questions on the phone, and a Time Out cannot be closed without them.
+         *
+         * Said out loud, with the reason and the fix. The alternative — and what the app used to do —
+         * was to decide that no questions meant no evaluation, submit, and let the server reject the
+         * record hours later. The guard would have had a shift they could not close and no idea why.
+         */
+        if (state.missingQuestions) {
+            GuardCard {
+                Text(
+                    "Shift questions not downloaded",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "A Time Out has to carry your end-of-shift answers, and this phone has not " +
+                        "downloaded the questions yet. Connect to the internet once and open the " +
+                        "app — then time out again. Your photo is not lost; scan again when you " +
+                        "are back online.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         Text(
             "End of shift",
             style = MaterialTheme.typography.headlineSmall,

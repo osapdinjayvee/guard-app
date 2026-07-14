@@ -288,17 +288,35 @@ class SelfieUiStateTest {
     }
 
     /**
-     * A Time Out with nothing to ask is not blocked.
+     * An empty question list means two opposite things, and they must not be confused.
      *
-     * The office may have deactivated every question, or the phone may never have downloaded them.
-     * Neither is a reason to leave a guard unable to clock out of a shift they have finished.
+     * This test used to assert the opposite — that a Time Out with no cached questions could simply
+     * submit. That was the bug: the server requires answers on every Time Out, so the record came
+     * back permanently rejected. The guard was not spared anything; they were given a shift they
+     * could not close and no reason why.
      */
     @Test
-    fun `a time out with no questions cached is not blocked from submitting`() {
-        val noQuestions = capturedState(type = AttendanceType.TIME_OUT, questions = emptyList())
+    fun `a time out cannot submit when the questions were never downloaded`() {
+        val notDownloaded = capturedState(type = AttendanceType.TIME_OUT, questions = emptyList())
 
-        assertFalse(noQuestions.needsEvaluation)
-        assertTrue(noQuestions.canSubmit)
+        assertTrue(notDownloaded.needsEvaluation)
+        assertTrue(notDownloaded.missingQuestions)
+        assertFalse(notDownloaded.canSubmit)
+    }
+
+    /**
+     * The office retired every question. There is genuinely nothing to ask, and that is not a reason
+     * to leave a guard unable to clock out of a shift they have finished.
+     */
+    @Test
+    fun `a time out submits when the server says there are no questions`() {
+        val noneExist = capturedState(
+            type = AttendanceType.TIME_OUT,
+            questions = emptyList(),
+        ).copy(questionsKnownEmpty = true)
+
+        assertFalse(noneExist.missingQuestions)
+        assertTrue(noneExist.canSubmit)
     }
 
     private companion object {

@@ -62,6 +62,8 @@ fun MobileSettingsDto.toDomain() = AppSettings(
     gpsTimeoutSeconds = gpsTimeoutSeconds,
     imageQuality = imageQuality,
     imageMaxDimensionPx = imageMaxDimensionPx,
+    timeInEarlyMinutes = timeInEarlyMinutes,
+    minCheckpointVisits = minCheckpointVisits,
     maintenanceMessage = maintenanceMessage,
 )
 

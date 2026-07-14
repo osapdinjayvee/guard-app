@@ -10,6 +10,8 @@ data class Checkpoint(
     val isActive: Boolean,
     val latitude: Double?,
     val longitude: Double?,
+    /** False for a patrol-only post: walked past on a round, never a place a shift begins or ends. */
+    val allowsTimeInOut: Boolean = true,
 )
 
 /**

@@ -30,6 +30,7 @@ fun CheckpointDto.toEntity(now: Long) = CheckpointEntity(
     // `ACTIVE`, and SQLite's `=` is case-sensitive — storing the wire value verbatim leaves every
     // checkpoint present but invisible to `observeActive()`.
     status = status.uppercase(),
+    allowsTimeInOut = allowsTimeInOut,
     updatedAt = now,
 )
 
@@ -40,6 +41,7 @@ fun CheckpointEntity.toDomain() = Checkpoint(
     isActive = status.equals(STATUS_ACTIVE, ignoreCase = true),
     latitude = latitude,
     longitude = longitude,
+    allowsTimeInOut = allowsTimeInOut,
 )
 
 fun DutyDto.toEntity(now: Long) = DutyEntity(

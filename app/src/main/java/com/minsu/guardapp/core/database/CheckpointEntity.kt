@@ -30,5 +30,7 @@ data class CheckpointEntity(
     val longitude: Double?,
     /** ACTIVE or DISABLED. A disabled checkpoint must not accept attendance. */
     val status: String,
+    /** False for a patrol-only post: a guard may scan it on a round, but not start or end a shift. */
+    val allowsTimeInOut: Boolean = true,
     val updatedAt: Long,
 )

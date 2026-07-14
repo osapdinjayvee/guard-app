@@ -21,4 +21,12 @@ data class CheckpointDto(
     @Json(name = "latitude") val latitude: Double? = null,
     @Json(name = "longitude") val longitude: Double? = null,
     @Json(name = "status") val status: String,
+    /**
+     * Whether a shift may be opened or closed here.
+     *
+     * Defaults to true: an older server does not send this key, and the safe reading of its silence
+     * is the behaviour every checkpoint had before the flag existed. Assuming false would silently
+     * make every post unusable for timing in.
+     */
+    @Json(name = "allows_time_in_out") val allowsTimeInOut: Boolean = true,
 )

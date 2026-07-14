@@ -157,6 +157,13 @@ class ScanViewModel @Inject constructor(
         var types = duty.allowedTypes
         val notices = mutableListOf<String>()
 
+        // Not every post is a place a shift begins or ends. A perimeter marker or a stairwell door
+        // is somewhere a roving guard passes on a round; nobody clocks on at one.
+        if (!checkpoint.allowsTimeInOut) {
+            types = types - AttendanceType.TIME_IN - AttendanceType.TIME_OUT
+            notices += "${checkpoint.code} is a patrol checkpoint — shifts do not start or end here."
+        }
+
         // A shift cannot be opened long before it starts. Turning up an hour early and timing in
         // does not make the shift an hour longer. Lateness is not capped — the late timestamp is
         // itself the evidence, and refusing it would leave the shift with no record at all.

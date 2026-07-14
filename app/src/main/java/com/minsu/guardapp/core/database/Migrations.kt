@@ -98,4 +98,19 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
-val GUARD_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+/**
+ * The patrol-only flag on a checkpoint.
+ *
+ * Defaults to 1 — true — for every row already on the phone. A checkpoint cached before this column
+ * existed behaved as though shifts could start there, and that is exactly what it must keep doing:
+ * defaulting to 0 would strand every guard whose cache predates the upgrade, unable to time in
+ * anywhere, until a refresh happened to reach them.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE checkpoints ADD COLUMN allowsTimeInOut INTEGER NOT NULL DEFAULT 1")
+    }
+}
+
+val GUARD_MIGRATIONS =
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)

@@ -482,4 +482,35 @@ class ScanViewModelTest {
 
     private fun at(wallClock: String): Long =
         java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).parse(wallClock)!!.time
+
+    /**
+     * A patrol-only post cannot open or close a shift.
+     *
+     * A perimeter marker is somewhere a roving guard passes on a round; nobody clocks on at one. The
+     * two shift types are removed, the visit stays, and the notice says which post this is — a guard
+     * shown only "Checkpoint" and no reason would think the app was broken.
+     */
+    @Test
+    fun `a patrol-only checkpoint offers a visit and nothing else`() = runTest {
+        val marker = Checkpoint(
+            id = 7,
+            code = "FENCE-3",
+            name = "Perimeter marker",
+            isActive = true,
+            latitude = null,
+            longitude = null,
+            allowsTimeInOut = false,
+        )
+        val vm = scanner(
+            schedule = roster(),
+            checkpoints = FakeCheckpoints(mapOf("FENCE-3" to CheckpointResolution.Resolved(marker))),
+        )
+
+        vm.onCodeScanned("FENCE-3")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertEquals(listOf(AttendanceType.CHECKPOINT), state.allowedTypes)
+        assertTrue(state.notice!!.contains("FENCE-3"))
+        assertTrue(state.notice!!.contains("patrol checkpoint"))
+    }
 }

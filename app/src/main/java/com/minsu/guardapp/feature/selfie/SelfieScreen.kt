@@ -440,8 +440,10 @@ private fun ShiftEvaluation(
             GuardCard {
                 Text(
                     question.question,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    // Large: this is the one thing on screen a tired guard has to read and answer at
+                    // the end of a twelve-hour shift. A small line invites a reflexive tap.
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }

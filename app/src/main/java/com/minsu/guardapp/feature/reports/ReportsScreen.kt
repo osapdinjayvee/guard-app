@@ -3,6 +3,7 @@ package com.minsu.guardapp.feature.reports
 import android.content.Intent
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,7 +25,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minsu.guardapp.domain.model.AttendanceRecord
+import com.minsu.guardapp.domain.model.SyncState
+import com.minsu.guardapp.feature.history.HistoryDetailScreen
 import com.minsu.guardapp.feature.home.SyncBadge
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.ScreenTitle
@@ -46,6 +52,15 @@ fun ReportsScreen(viewModel: ReportsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Tapping a row opens the shared detail — the one place the rejection reason and a "Try again"
+    // live. A nested route rather than a scaffold destination, so the bottom bar stays on Reports
+    // while it is open. Mirrors History; survives rotation via rememberSaveable.
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    selectedId?.let { id ->
+        HistoryDetailScreen(recordId = id, onBack = { selectedId = null })
+        return
+    }
 
     Column(
         Modifier
@@ -87,7 +102,9 @@ fun ReportsScreen(viewModel: ReportsViewModel = hiltViewModel()) {
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(state.records, key = { it.id }) { ReportRow(it) }
+            items(state.records, key = { it.id }) { record ->
+                ReportRow(record, onClick = { selectedId = record.id })
+            }
         }
     }
 }
@@ -137,8 +154,8 @@ private fun Stat(label: String, value: Int) {
 }
 
 @Composable
-private fun ReportRow(record: AttendanceRecord) {
-    GuardCard {
+private fun ReportRow(record: AttendanceRecord, onClick: () -> Unit) {
+    GuardCard(modifier = Modifier.clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -152,6 +169,19 @@ private fun ReportRow(record: AttendanceRecord) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // A bare red "Rejected" tells the guard nothing they can act on. When the server
+                // gave a reason, show it here — and the whole row taps through to a detail with a
+                // "Try again". A rejection the guard cannot see the cause of is the exact complaint
+                // this row exists to answer.
+                if (record.syncState == SyncState.REJECTED || record.syncState == SyncState.FAILED) {
+                    record.lastError?.let { reason ->
+                        Text(
+                            reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
             SyncBadge(record.syncState)
         }

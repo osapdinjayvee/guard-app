@@ -55,6 +55,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Google Maps API key, injected from the MAPS_API_KEY Gradle property (see
+             build.gradle.kts). Empty when unset: the map renders blank rather than failing the build. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
+
         <!-- Hilt supplies the WorkManager configuration (Configuration.Provider on the
              Application), so the default on-startup initializer must be removed. -->
         <provider

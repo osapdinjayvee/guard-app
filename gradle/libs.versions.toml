@@ -26,6 +26,9 @@ camerax = "1.4.1"
 # a guard's first scan may well be at a basement checkpoint with no signal.
 mlkitBarcode = "17.3.0"
 playLocation = "21.3.0"
+# Maps Compose 6.x aligns with Compose 1.7 (the BOM above); it pulls play-services-maps 19.
+mapsCompose = "6.1.2"
+playServicesMaps = "19.0.0"
 work = "2.10.0"
 hiltWork = "1.2.0"
 biometric = "1.1.0"
@@ -81,6 +84,8 @@ androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycl
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playLocation" }
+play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
 androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }

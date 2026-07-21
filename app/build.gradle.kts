@@ -43,6 +43,11 @@ android {
         versionName = appVersion.getProperty("versionName")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Google Maps reads its key from a manifest meta-data. Sourced from the MAPS_API_KEY Gradle
+        // property (put it in a gitignored gradle.properties or ~/.gradle/gradle.properties) so the
+        // key is never committed. Absent, the map tiles render blank but the app still builds and runs.
+        manifestPlaceholders["MAPS_API_KEY"] = (project.findProperty("MAPS_API_KEY") as String?).orEmpty()
     }
 
     signingConfigs {
@@ -155,6 +160,8 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode.scanning)
     implementation(libs.play.services.location)
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)

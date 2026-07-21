@@ -247,13 +247,21 @@ class DefaultAttendanceRepository @Inject constructor(
 
     override suspend fun submit(id: String, draft: AttendanceDraft) {
         val now = clock.nowMillis()
+        val userId = userId()
+        // A record stamped with NO_USER is orphaned: every history and report query is scoped to the
+        // signed-in guard's id, so a -1 record is written to the table and then shown to no one. Refuse
+        // rather than write it — the guard sees an error and can retry, instead of a capture that
+        // vanishes silently. In practice this only fires if the profile flow has not emitted yet.
+        check(userId != NO_USER) {
+            "Could not tell who is signed in. Reopen the app and try again — your photo is not lost."
+        }
         // Insert first, then enqueue. If the insert throws the record is not committed and no
         // sync is scheduled; if enqueue somehow fails the record is still safely PENDING and
         // the periodic drain (T-24) picks it up.
         dao.insert(
             AttendanceEntity(
                 id = id,
-                userId = userId(),
+                userId = userId,
                 checkpointId = draft.checkpointId,
                 checkpointCode = draft.checkpointCode,
                 attendanceType = when (draft.type) {

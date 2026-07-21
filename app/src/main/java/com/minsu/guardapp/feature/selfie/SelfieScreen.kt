@@ -89,7 +89,14 @@ fun SelfieScreen(
         ) {
             val captured = state.capturedFile
             when {
-                state.submitted -> SubmittedConfirmation(onDone = onCancel)
+                // reset() before leaving: this ViewModel is retained on the Scan tab, and a
+                // lingering submitted=true would render as a stale "recorded" screen on the next
+                // capture's first frame — a false success a guard can dismiss, losing a record they
+                // never took.
+                state.submitted -> SubmittedConfirmation(onDone = {
+                    viewModel.reset()
+                    onCancel()
+                })
 
                 // The acknowledgement is a screen of its own, reached only once the photo is
                 // accepted. Three decisions on one scroll — is the photo good, have I read the

@@ -22,6 +22,7 @@ import com.minsu.guardapp.domain.repository.EvaluationRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -213,22 +214,46 @@ class SelfieViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SelfieUiState())
     val uiState: StateFlow<SelfieUiState> = _uiState.asStateFlow()
 
-    /** Generated once, before any capture, and reused as the record's idempotency key. */
-    private val recordId = UUID.randomUUID().toString()
+    /**
+     * The record's idempotency key. Regenerated for every fresh attendance — a `var`, not a `val` —
+     * because this ViewModel is retained on the Scan tab and reused for scan after scan. Reusing one
+     * id across two captures would let the server collapse them into a single record.
+     */
+    private var recordId = UUID.randomUUID().toString()
+
+    /**
+     * The long-lived collectors of the *current* attendance: the live clock and the GPS stream, which
+     * never complete on their own. Cancelled when the next attendance begins, so they do not stack up
+     * — one clock tick per second per abandoned capture — nor let a previous shot's stream write into
+     * the next shot's overlay.
+     */
+    private val sessionJobs = mutableListOf<Job>()
 
     fun start(checkpoint: Checkpoint, type: AttendanceType) {
-        if (_uiState.value.checkpoint != null) return
+        val current = _uiState.value
+        // The same attendance, re-entered by a recomposition rather than a new scan. Leave the
+        // in-progress capture — its photo, its half-answered evaluation — untouched.
+        if (current.checkpoint?.id == checkpoint.id && current.type == type && !current.submitted) return
 
-        _uiState.update {
-            it.copy(checkpoint = checkpoint, type = type, nowMillis = clock.nowMillis())
-        }
+        // A genuinely new attendance. This ViewModel outlives any one capture (it is scoped to the
+        // Scan tab, which never leaves the back stack), so without a deliberate reset the previous
+        // capture's state would be replayed for this one: the guard scans a checkpoint and is shown
+        // the last shot's "Attendance recorded" screen instead of a fresh camera. Start clean.
+        sessionJobs.forEach { it.cancel() }
+        sessionJobs.clear()
+        recordId = UUID.randomUUID().toString()
+        _uiState.value = SelfieUiState(
+            checkpoint = checkpoint,
+            type = type,
+            nowMillis = clock.nowMillis(),
+        )
 
-        viewModelScope.launch {
-            val current = settings.current()
+        sessionJobs += viewModelScope.launch {
+            val settingsNow = settings.current()
             _uiState.update {
                 it.copy(
                     guardName = profiles.observe().first()?.name.orEmpty(),
-                    settings = current,
+                    settings = settingsNow,
                     duty = duties.activeDuty(),
                     // Only a Time Out is asked. Read from the cache, so the questions are there at
                     // the end of a shift at a perimeter post with no signal.
@@ -241,7 +266,7 @@ class SelfieViewModel @Inject constructor(
         // An empty question cache on a Time Out is recoverable while there is still a signal, and
         // this is the last moment anyone is looking. Try once; if it fails, the guard is told plainly
         // rather than being walked into a submission the server will refuse.
-        viewModelScope.launch {
+        sessionJobs += viewModelScope.launch {
             if (type != AttendanceType.TIME_OUT) return@launch
             if (evaluations.questions().isNotEmpty()) return@launch
 
@@ -260,10 +285,23 @@ class SelfieViewModel @Inject constructor(
 
         // The overlay is *live*, so the clock in it has to actually run. A timestamp frozen at the
         // moment the screen opened would be burned into a photo taken a minute later.
-        viewModelScope.launch {
+        sessionJobs += viewModelScope.launch {
             while (true) {
                 _uiState.update { it.copy(nowMillis = clock.nowMillis()) }
                 delay(1_000)
+            }
+        }
+
+        // Seed the overlay from the fix the system already holds, so it shows coordinates the instant
+        // the screen opens instead of sitting on "Acquiring GPS…" for the seconds a cold high-accuracy
+        // fix takes to lock. Only a *recent* cached fix is trusted — an hours-old one is exactly the
+        // fraud the photo exists to prevent — and the live stream below overwrites it within seconds.
+        sessionJobs += viewModelScope.launch {
+            location.lastKnownFix()?.let { seed ->
+                val ageMillis = clock.nowMillis() - seed.timeMillis
+                if (ageMillis in 0..FRESH_SEED_WINDOW_MILLIS) {
+                    _uiState.update { if (it.fix == null) it.copy(fix = seed, isAcquiringGps = false) else it }
+                }
             }
         }
 
@@ -272,7 +310,7 @@ class SelfieViewModel @Inject constructor(
         // first bad reading into the photo, or — if it timed out — leave the guard permanently
         // unable to capture with no way to retry. This keeps improving for as long as the screen
         // is open, and stops the moment it closes.
-        viewModelScope.launch {
+        sessionJobs += viewModelScope.launch {
             location.stream().collect { fix ->
                 _uiState.update { it.copy(fix = fix, isAcquiringGps = false) }
             }
@@ -280,7 +318,7 @@ class SelfieViewModel @Inject constructor(
 
         // The acquisition window is not a deadline for the *stream* — it keeps trying — but it is
         // the point at which we stop saying "acquiring" and admit we have nothing.
-        viewModelScope.launch {
+        sessionJobs += viewModelScope.launch {
             delay(settings.current().gpsTimeoutSeconds * 1_000L)
             _uiState.update { if (it.fix == null) it.copy(isAcquiringGps = false) else it }
         }
@@ -398,6 +436,25 @@ class SelfieViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Wipe the ViewModel back to a blank capture.
+     *
+     * This instance is scoped to the Scan tab and outlives any one capture, so a finished attendance
+     * leaves `submitted = true` sitting in it. The next attendance re-enters [SelfieScreen] and, for
+     * the first frame — before [start]'s reset coroutine has run — renders that stale terminal state:
+     * an "Attendance recorded" screen with no camera, indistinguishable from a real success. A guard
+     * who dismisses it has recorded nothing, and the record they thought they took never existed.
+     *
+     * Called the moment the confirmation is dismissed, so the terminal state can never be replayed
+     * onto the following capture.
+     */
+    fun reset() {
+        sessionJobs.forEach { it.cancel() }
+        sessionJobs.clear()
+        recordId = UUID.randomUUID().toString()
+        _uiState.value = SelfieUiState()
+    }
+
     /** Discards the image so the guard can retake before anything is committed. */
     fun retake() {
         _uiState.value.capturedFile?.delete()
@@ -414,6 +471,12 @@ class SelfieViewModel @Inject constructor(
         }
     }
 }
+
+/**
+ * How recent a cached fix must be to seed the overlay. A minute old is still "here"; older than that
+ * and we wait for the live stream rather than show a location the guard may have walked away from.
+ */
+private const val FRESH_SEED_WINDOW_MILLIS = 60_000L
 
 private fun dateTime(millis: Long): String =
     SimpleDateFormat("d MMM yyyy · h:mm:ss a", Locale.getDefault()).format(Date(millis))

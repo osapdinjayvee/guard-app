@@ -37,6 +37,14 @@ interface LocationProvider {
     suspend fun currentFix(timeoutMillis: Long): LocationFix?
 
     /**
+     * The last fix the system already has cached, or null. Returns almost instantly — it does not
+     * power up the GPS chip — which is exactly why it is only ever used to *seed* the live overlay
+     * while a fresh fix is negotiated. The caller decides whether it is recent enough to trust; a
+     * fix this returns is never treated, on its own, as the location a record is stamped with.
+     */
+    suspend fun lastKnownFix(): LocationFix?
+
+    /**
      * A live stream of fixes for as long as it is collected.
      *
      * The overlay burned into a selfie has to show where the guard *is*, and a single fix taken
@@ -87,6 +95,30 @@ class FusedLocationProvider @Inject constructor(
                 // Stop the GPS chip when the guard leaves the screen mid-acquisition.
                 continuation.invokeOnCancellation { cancellation.cancel() }
             }
+        }
+
+    /**
+     * `lastLocation`, deliberately: this is the cached fix and it is meant to be. It gives the guard
+     * coordinates on screen at once instead of a blank "Acquiring GPS…", and the freshness check that
+     * decides whether to show it lives with the caller, next to the anti-fraud rules.
+     */
+    @SuppressLint("MissingPermission") // The caller is behind PermissionGate(ACCESS_FINE_LOCATION).
+    override suspend fun lastKnownFix(): LocationFix? =
+        suspendCancellableCoroutine { continuation ->
+            client.lastLocation
+                .addOnSuccessListener { location ->
+                    continuation.resume(
+                        location?.let {
+                            LocationFix(
+                                latitude = it.latitude,
+                                longitude = it.longitude,
+                                accuracyMetres = it.accuracy,
+                                timeMillis = it.time,
+                            )
+                        }
+                    )
+                }
+                .addOnFailureListener { continuation.resume(null) }
         }
 
     /**

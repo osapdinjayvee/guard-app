@@ -177,6 +177,47 @@ class AttendanceSubmitTest {
         assertEquals("no sync scheduled for a record that was never committed", 0, scheduler.syncRequests)
     }
 
+    /**
+     * A record the app cannot attribute to a signed-in guard is worse than no record: every history
+     * and report query is scoped to the logged-in id, so one written under NO_USER (-1) is saved to
+     * the table and then shown to nobody — the "recorded, but nowhere in Reports" the guards hit. It
+     * must be refused loudly so the guard can retry, not written and silently lost.
+     */
+    @Test
+    fun `submit refuses a record when nobody is signed in`() = runTest {
+        val dao = RecordingDao()
+        val scheduler = RecordingScheduler()
+
+        val result = runCatching {
+            repo(dao, scheduler, profile = null).submit("abc", draft)
+        }
+
+        assertTrue("a record with no owner must be refused, not written", result.isFailure)
+        assertTrue("nothing may be inserted under NO_USER", dao.inserted.isEmpty())
+        assertEquals("no sync for a record that was never committed", 0, scheduler.syncRequests)
+    }
+
+    /**
+     * Two attendances at the same checkpoint, same type, same guard are two records — not one.
+     *
+     * This is the write-path half of the selfie-skip fix: each capture carries its own idempotency
+     * key, so a guard timing in twice at GATE-A leaves two rows the server can tell apart, rather
+     * than a second submission the server collapses into the first — or, as the UAT showed, a stale
+     * "recorded" screen that wrote nothing at all.
+     */
+    @Test
+    fun `two captures at the same checkpoint are stored as two separate records`() = runTest {
+        val dao = RecordingDao()
+        val repo = repo(dao, RecordingScheduler(), GuardProfile(7, "Juan", "guard01"))
+
+        repo.submit("first-key", draft)
+        repo.submit("second-key", draft)
+
+        assertEquals("both captures must persist", 2, dao.inserted.size)
+        assertEquals(setOf("first-key", "second-key"), dao.inserted.map { it.id }.toSet())
+        assertTrue("both belong to the same guard", dao.inserted.all { it.userId == 7L })
+    }
+
     @Test
     fun `a null fix is stored as null coordinates, not zero`() = runTest {
         val dao = RecordingDao()

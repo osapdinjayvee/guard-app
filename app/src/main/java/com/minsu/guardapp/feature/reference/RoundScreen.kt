@@ -1,6 +1,7 @@
 package com.minsu.guardapp.feature.reference
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +63,12 @@ data class Stop(
     /** The most recent visit, or null if the post has not been reached at all. */
     val lastVisitedAt: Long?,
 ) {
-    /** A post is not done at one visit. The round is every post, the required number of times. */
+    /**
+     * Whether this post has met its *minimum*.
+     *
+     * Not "finished". Two visits is the fewest a post may have, not the most it may receive: a guard
+     * patrols for the whole shift, and the tenth visit to a door is as welcome as the second.
+     */
     val isDone: Boolean get() = visits >= required
 }
 
@@ -135,6 +144,15 @@ fun RoundScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Tapping a post opens its full-screen map. A nested view rather than a scaffold destination, so
+    // the bottom navigation stays visible while it is open. Survives rotation via the checkpoint id.
+    var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val selected = selectedId?.let { id -> state.stops.firstOrNull { it.checkpoint.id == id }?.checkpoint }
+    if (selected != null) {
+        CheckpointMapScreen(checkpoint = selected, onBack = { selectedId = null })
+        return
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -149,7 +167,9 @@ fun RoundScreen(
 
         item { Bookend("Time In", state.timedInAt, "Scan any post to start your shift") }
 
-        items(state.stops, key = { it.checkpoint.id }) { stop -> StopRow(stop) }
+        items(state.stops, key = { it.checkpoint.id }) { stop ->
+            StopRow(stop, onClick = { selectedId = stop.checkpoint.id })
+        }
 
         item { Bookend("Time Out", state.timedOutAt, "Scan to end your shift") }
     }
@@ -166,7 +186,7 @@ private fun ProgressCard(state: RoundUiState) {
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            "${state.done} of ${state.total} posts complete",
+            "${state.done} of ${state.total} posts have their minimum",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -180,8 +200,10 @@ private fun ProgressCard(state: RoundUiState) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Every post needs ${state.stops.firstOrNull()?.required ?: 2} visits. " +
-                "Counted from this phone, so it is right with no signal.",
+            // Said plainly, because "2 of 2" reads as a quota that closes — a guard who thinks the
+            // post is finished stops walking to it, and the rest of the shift goes unpatrolled.
+            "At least ${state.stops.firstOrNull()?.required ?: 2} visits per post — a minimum, " +
+                "not a limit. Keep patrolling; every visit is recorded.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -189,8 +211,8 @@ private fun ProgressCard(state: RoundUiState) {
 }
 
 @Composable
-private fun StopRow(stop: Stop) {
-    GuardCard {
+private fun StopRow(stop: Stop, onClick: () -> Unit) {
+    GuardCard(modifier = Modifier.clickable(onClick = onClick)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusDot(done = stop.isDone)
             Spacer(Modifier.width(14.dp))
@@ -207,18 +229,33 @@ private fun StopRow(stop: Stop) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            // "1 of 2", not a tick. A post visited once looks identical to one never reached if all
-            // the row shows is done-or-not, and the guard has to go back to a post they half-did.
+            /*
+             * The count of visits made, and the minimum beneath it — never "2 of 2".
+             *
+             * A fraction reads as a quota: reach the denominator and the job is done. A guard who
+             * believes a post is finished stops walking to it, and the rest of the shift goes
+             * unpatrolled. What the roster actually asks for is *at least* two visits, and the third
+             * is worth as much as the second.
+             */
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    "${stop.visits} of ${stop.required}",
+                    when (stop.visits) {
+                        0 -> "Not yet"
+                        1 -> "1 visit"
+                        else -> "${stop.visits} visits"
+                    },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (stop.isDone) SyncSynced else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    if (stop.isDone) "minimum met" else "min ${stop.required}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 stop.lastVisitedAt?.let {
                     Text(
-                        clockTime(it),
+                        "last ${clockTime(it)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

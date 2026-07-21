@@ -50,6 +50,15 @@ interface AttendanceRepository {
     /** Records that still owe the server an upload. Drives Home's pending badge. */
     fun observeUnsyncedCount(): Flow<Int>
 
+    /**
+     * Unsynced records captured by a *different* guard on this device.
+     *
+     * The sync worker uploads only the current guard's records, so a previous account's captures sit
+     * here, invisible to [observeUnsyncedCount], until their owner signs back in. Surfaced on Home so
+     * they are never silently stuck.
+     */
+    fun observeOtherAccountUnsyncedCount(): Flow<Int>
+
     fun observeHistory(limit: Int = 50): Flow<List<AttendanceRecord>>
 
     /** One record, live: the detail screen follows its sync status as the worker runs. */

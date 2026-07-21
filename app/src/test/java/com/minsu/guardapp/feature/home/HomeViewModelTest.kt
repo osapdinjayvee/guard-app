@@ -58,6 +58,7 @@ class HomeViewModelTest {
     }
     private val attendanceRepo = object : AttendanceRepository {
         override fun observeUnsyncedCount(): Flow<Int> = pending
+        override fun observeOtherAccountUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> = history
         override suspend fun submit(id: String, draft: com.minsu.guardapp.domain.model.AttendanceDraft) = Unit
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
@@ -66,6 +67,7 @@ class HomeViewModelTest {
         override suspend fun syncNow(): Int = 0
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
         override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
+        override suspend fun lastVisitedCheckpointToday(): Long? = null
     }
     private val settingsRepo = object : SettingsRepository {
         override fun observe(): Flow<AppSettings> = settings

@@ -43,13 +43,20 @@ class LoginViewModelTest {
         override fun unlock() { unlockCount++; locked.value = false }
     }
 
+    private class FakeScheduler : com.minsu.guardapp.core.sync.SyncScheduler {
+        var syncRequests = 0
+        override fun requestSync() { syncRequests++ }
+        override fun syncNow() {}
+        override fun observeSyncing(): Flow<Boolean> = MutableStateFlow(false)
+    }
+
     @Before fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
     fun `submit is blocked until both fields are filled`() = runTest {
         val auth = FakeAuth()
-        val vm = LoginViewModel(auth, FakeAppLock())
+        val vm = LoginViewModel(auth, FakeAppLock(), FakeScheduler())
 
         assertFalse(vm.uiState.value.canSubmit)
         vm.onUsernameChange("guard01")
@@ -61,7 +68,7 @@ class LoginViewModelTest {
     @Test
     fun `submitting with empty fields does not call the api`() = runTest {
         val auth = FakeAuth()
-        LoginViewModel(auth, FakeAppLock()).submit()
+        LoginViewModel(auth, FakeAppLock(), FakeScheduler()).submit()
 
         assertEquals(0, auth.attempts)
     }
@@ -69,7 +76,7 @@ class LoginViewModelTest {
     @Test
     fun `a successful login leaves no error and stops the spinner`() = runTest {
         val auth = FakeAuth()
-        val vm = LoginViewModel(auth, FakeAppLock())
+        val vm = LoginViewModel(auth, FakeAppLock(), FakeScheduler())
         vm.onUsernameChange("guard01"); vm.onPasswordChange("secret")
 
         vm.submit()
@@ -82,7 +89,7 @@ class LoginViewModelTest {
     @Test
     fun `whitespace around the username is trimmed before it reaches the api`() = runTest {
         val auth = FakeAuth()
-        val vm = LoginViewModel(auth, FakeAppLock())
+        val vm = LoginViewModel(auth, FakeAppLock(), FakeScheduler())
         vm.onUsernameChange("  guard01  "); vm.onPasswordChange("secret")
 
         vm.submit()
@@ -95,7 +102,7 @@ class LoginViewModelTest {
     @Test
     fun `wrong credentials produce a message a guard can act on`() = runTest {
         val auth = FakeAuth(ApiResult.Failure(ApiError.InvalidCredentials))
-        val vm = LoginViewModel(auth, FakeAppLock())
+        val vm = LoginViewModel(auth, FakeAppLock(), FakeScheduler())
         vm.onUsernameChange("guard01"); vm.onPasswordChange("wrong")
 
         vm.submit()
@@ -107,7 +114,7 @@ class LoginViewModelTest {
     @Test
     fun `a dead network is distinguished from a rejected password`() = runTest {
         val auth = FakeAuth(ApiResult.Failure(ApiError.Network(IOException("offline"))))
-        val vm = LoginViewModel(auth, FakeAppLock())
+        val vm = LoginViewModel(auth, FakeAppLock(), FakeScheduler())
         vm.onUsernameChange("guard01"); vm.onPasswordChange("secret")
 
         vm.submit()
@@ -118,7 +125,7 @@ class LoginViewModelTest {
     @Test
     fun `typing clears the previous error`() = runTest {
         val auth = FakeAuth(ApiResult.Failure(ApiError.InvalidCredentials))
-        val vm = LoginViewModel(auth, FakeAppLock())
+        val vm = LoginViewModel(auth, FakeAppLock(), FakeScheduler())
         vm.onUsernameChange("guard01"); vm.onPasswordChange("wrong")
         vm.submit()
         assertEquals("Wrong username or password.", vm.uiState.value.error)
@@ -132,7 +139,7 @@ class LoginViewModelTest {
     @Test
     fun `login unlocks the app lock`() = runTest {
         val lock = FakeAppLock()
-        val vm = LoginViewModel(FakeAuth(), lock)
+        val vm = LoginViewModel(FakeAuth(), lock, FakeScheduler())
         vm.onUsernameChange("guard01"); vm.onPasswordChange("secret")
 
         vm.submit()
@@ -143,7 +150,7 @@ class LoginViewModelTest {
     @Test
     fun `a failed login does not unlock`() = runTest {
         val lock = FakeAppLock()
-        val vm = LoginViewModel(FakeAuth(ApiResult.Failure(ApiError.InvalidCredentials)), lock)
+        val vm = LoginViewModel(FakeAuth(ApiResult.Failure(ApiError.InvalidCredentials)), lock, FakeScheduler())
         vm.onUsernameChange("guard01"); vm.onPasswordChange("wrong")
 
         vm.submit()

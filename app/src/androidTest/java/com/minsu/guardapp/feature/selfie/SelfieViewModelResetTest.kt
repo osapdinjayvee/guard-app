@@ -156,6 +156,7 @@ class SelfieViewModelResetTest {
 
     private class FakeAttendance : AttendanceRepository {
         override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
+        override fun observeOtherAccountUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
         override suspend fun retry(id: String) = Unit

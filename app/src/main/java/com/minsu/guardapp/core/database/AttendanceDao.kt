@@ -88,6 +88,26 @@ interface AttendanceDao {
         statuses: List<SyncStatus> = SyncStatus.UNSYNCED,
     ): Flow<Int>
 
+    /**
+     * Unsynced records that belong to *another* signed-in guard, not the current one.
+     *
+     * The sync worker only ever uploads the current guard's records — a capture must never go up
+     * under a different guard's token — so a record left behind by a previous account is stranded on
+     * this device until its owner signs back in. It is invisible to [observeUnsyncedCount], which is
+     * scoped to the current guard, so it is surfaced separately rather than silently stuck. NO_USER
+     * (-1) orphans are excluded: those belong to nobody, not to another account.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM attendance
+        WHERE userId != :userId AND userId != -1 AND syncStatus IN (:statuses)
+        """
+    )
+    fun observeOtherAccountUnsyncedCount(
+        userId: Long,
+        statuses: List<SyncStatus> = SyncStatus.UNSYNCED,
+    ): Flow<Int>
+
     @Query(
         """
         SELECT * FROM attendance

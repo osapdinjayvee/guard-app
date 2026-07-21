@@ -177,6 +177,7 @@ class RoundViewModelTest {
         private val records: List<AttendanceRecord>,
     ) : AttendanceRepository {
         override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
+        override fun observeOtherAccountUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> =
             MutableStateFlow(records)
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)

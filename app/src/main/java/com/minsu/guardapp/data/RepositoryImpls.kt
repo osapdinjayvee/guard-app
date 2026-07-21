@@ -177,6 +177,9 @@ class DefaultAttendanceRepository @Inject constructor(
     override fun observeUnsyncedCount(): Flow<Int> =
         currentUserId().flatMapLatest { dao.observeUnsyncedCount(it) }
 
+    override fun observeOtherAccountUnsyncedCount(): Flow<Int> =
+        currentUserId().flatMapLatest { dao.observeOtherAccountUnsyncedCount(it) }
+
     override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> =
         currentUserId().flatMapLatest { userId ->
             dao.observePage(userId, limit).map { entities -> entities.map { it.toDomain() } }

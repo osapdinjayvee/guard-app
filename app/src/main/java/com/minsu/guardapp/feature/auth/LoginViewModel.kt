@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.minsu.guardapp.core.network.ApiError
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.security.AppLock
+import com.minsu.guardapp.core.sync.SyncScheduler
 import com.minsu.guardapp.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,7 @@ data class LoginUiState(
 class LoginViewModel @Inject constructor(
     private val auth: AuthRepository,
     private val appLock: AppLock,
+    private val syncScheduler: SyncScheduler,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -47,7 +49,14 @@ class LoginViewModel @Inject constructor(
             _uiState.update { it.copy(isSubmitting = true, error = null) }
             val result = auth.login(state.username, state.password)
             // The password itself is the authentication; do not immediately demand biometrics.
-            if (result is ApiResult.Success) appLock.unlock()
+            if (result is ApiResult.Success) {
+                appLock.unlock()
+                // Drain this guard's queue now. On a device shared between guards, their records are
+                // stranded while someone else is signed in — the worker only uploads the current
+                // guard's. Signing back in is the moment their pending captures can finally go up, so
+                // kick a sync rather than waiting for the next periodic pass.
+                syncScheduler.requestSync()
+            }
             _uiState.update {
                 it.copy(
                     isSubmitting = false,

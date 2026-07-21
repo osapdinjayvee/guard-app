@@ -27,6 +27,8 @@ import javax.inject.Inject
 data class HomeUiState(
     val profile: GuardProfile? = null,
     val pendingSyncCount: Int = 0,
+    /** Unsynced records captured by another guard on this shared device. 0 for a single-guard phone. */
+    val otherAccountPendingCount: Int = 0,
     val lastRecord: AttendanceRecord? = null,
     val announcements: List<Announcement> = emptyList(),
     val maintenanceMessage: String? = null,
@@ -71,10 +73,22 @@ class HomeViewModel @Inject constructor(
                     announcements = notices,
                 )
             }.collect { fresh ->
-                // isOnline and isRefreshing are owned by the other collectors below.
+                // isOnline, isRefreshing, todayDuty and otherAccountPendingCount are owned by the
+                // other collectors below; carry them across so a fresh emission here does not blank them.
                 _uiState.update { current ->
-                    fresh.copy(isOnline = current.isOnline, isRefreshing = current.isRefreshing)
+                    fresh.copy(
+                        isOnline = current.isOnline,
+                        isRefreshing = current.isRefreshing,
+                        todayDuty = current.todayDuty,
+                        otherAccountPendingCount = current.otherAccountPendingCount,
+                    )
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            attendance.observeOtherAccountUnsyncedCount().collect { count ->
+                _uiState.update { it.copy(otherAccountPendingCount = count) }
             }
         }
 

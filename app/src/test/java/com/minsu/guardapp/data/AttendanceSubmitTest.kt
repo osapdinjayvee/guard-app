@@ -35,6 +35,7 @@ class AttendanceSubmitTest {
         override fun observePage(userId: Long, limit: Int, offset: Int): Flow<List<AttendanceEntity>> =
             MutableStateFlow(inserted.filter { it.userId == userId })
         override fun observeUnsyncedCount(userId: Long, statuses: List<SyncStatus>): Flow<Int> = MutableStateFlow(0)
+        override fun observeOtherAccountUnsyncedCount(userId: Long, statuses: List<SyncStatus>): Flow<Int> = MutableStateFlow(0)
         override suspend fun eligibleForSync(userId: Long, now: Long, limit: Int, statuses: List<SyncStatus>) =
             emptyList<AttendanceEntity>()
         override suspend fun claim(id: String, now: Long, statuses: List<SyncStatus>) = 0

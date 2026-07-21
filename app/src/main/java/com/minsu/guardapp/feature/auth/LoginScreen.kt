@@ -20,11 +20,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -33,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -60,6 +66,12 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
+    // Local to the screen and never persisted with the credential: a guard typing a password on a
+    // phone in the dark should be able to check what they typed, but the reveal must not survive
+    // the screen. rememberSaveable so it rides out a rotation, not the ViewModel so it is forgotten
+    // on the way out.
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -145,7 +157,26 @@ fun LoginScreen(
             enabled = !state.isSubmitting,
             shape = RoundedCornerShape(28.dp),
             colors = fieldColours(),
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            trailingIcon = {
+                IconButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    enabled = !state.isSubmitting,
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (passwordVisible) R.drawable.ic_eye_off else R.drawable.ic_eye,
+                        ),
+                        // The action, not the state: a guard hears what tapping will do.
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Done,

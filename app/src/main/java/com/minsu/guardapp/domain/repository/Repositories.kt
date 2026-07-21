@@ -96,6 +96,14 @@ interface AttendanceRepository {
     suspend fun lastVisitedCheckpointToday(): Long?
 
     /**
+     * Whether the guard has already timed out today — i.e. the shift is closed.
+     *
+     * Once true, scanning offers nothing: the shift is done, and Time In returns only with the next
+     * one. Read locally so it holds without a signal.
+     */
+    suspend fun hasTimedOutToday(): Boolean
+
+    /**
      * Commits a captured attendance record to the local database, then requests a sync. The
      * record is durable the instant this returns — the write is local-first, never
      * network-first, so a valid attendance is never lost to connectivity.

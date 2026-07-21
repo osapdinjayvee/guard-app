@@ -50,6 +50,12 @@ class AttendanceSubmitTest {
                     it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.TIME_IN &&
                     it.capturedAt in fromMillis until toMillis
             }
+        override suspend fun firstTimeOutBetween(userId: Long, fromMillis: Long, toMillis: Long): AttendanceEntity? =
+            inserted.firstOrNull {
+                it.userId == userId &&
+                    it.attendanceType == com.minsu.guardapp.core.database.AttendanceType.TIME_OUT &&
+                    it.capturedAt in fromMillis until toMillis
+            }
         override suspend fun checkpointVisitCountsBetween(
             userId: Long,
             fromMillis: Long,

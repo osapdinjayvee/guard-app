@@ -68,6 +68,7 @@ class HomeViewModelTest {
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
         override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
         override suspend fun lastVisitedCheckpointToday(): Long? = null
+        override suspend fun hasTimedOutToday(): Boolean = false
     }
     private val settingsRepo = object : SettingsRepository {
         override fun observe(): Flow<AppSettings> = settings

@@ -64,6 +64,12 @@ sealed interface ScanState {
      */
     data class WrongPost(val scanned: Checkpoint, val timedInAt: String) : ScanState
 
+    /**
+     * The shift is already closed — the guard has timed out today. Scanning offers nothing more;
+     * Time In returns with the next shift. Distinct from a rest day: they worked today, and finished.
+     */
+    data class ShiftComplete(val checkpoint: Checkpoint) : ScanState
+
     /** Rostered, but not today. A rest day is not an error, and is not worded as one. */
     data object NotScheduledToday : ScanState
 
@@ -126,6 +132,12 @@ class ScanViewModel @Inject constructor(
         val duty = schedule.today() ?: return ScanState.NotScheduledToday
         _duty.value = duty
 
+        // The shift is already closed. A guard who has timed out is done for the day — offering Time
+        // Out again (or anything else) would let them re-open a finished shift. Checked before the
+        // wrong-post rule, because "your shift is over" is truer and kinder than "wrong post" to a
+        // guard who has clocked out and is scanning on their way past.
+        if (attendance.hasTimedOutToday()) return ScanState.ShiftComplete(checkpoint)
+
         // A stationed guard's post is wherever they timed in. If they have not timed in yet, this
         // scan *is* the post — anything they scan is allowed, and it becomes the one they must
         // return to.
@@ -175,9 +187,18 @@ class ScanViewModel @Inject constructor(
                 "${config.timeInEarlyMinutes} minutes before your shift."
         }
 
+        // One Time In per shift. Once the guard has clocked on today, offering Time In again would
+        // let them open a second shift on top of the first — the "multiple time ins" a re-scan or a
+        // fumbled tap produces. It is removed rather than shown and refused, so what is left is Time
+        // Out (and, for a rover, checkpoint visits) — the only things that can still happen today.
+        val timedInToday = schedule.postTimedInAtToday() != null
+        if (timedInToday) {
+            types = types - AttendanceType.TIME_IN
+        }
+
         // A patrol starts when the shift does. A checkpoint visit before any Time In would be
         // evidence of a round walked by someone who, on paper, had not clocked on.
-        if (schedule.postTimedInAtToday() == null) {
+        if (!timedInToday) {
             types = types - AttendanceType.CHECKPOINT
             notices += "Time In first — a patrol starts when your shift does."
         }
@@ -207,7 +228,7 @@ class ScanViewModel @Inject constructor(
                 val names = outstanding.take(3).joinToString(", ") { it.code }
                 val more = outstanding.size - minOf(3, outstanding.size)
 
-                notices += "Every post needs $required visits. Still to do: $names" +
+                notices += "Every post needs at least $required visits. Still to do: $names" +
                     (if (more > 0) " and $more more." else ".")
             }
         }

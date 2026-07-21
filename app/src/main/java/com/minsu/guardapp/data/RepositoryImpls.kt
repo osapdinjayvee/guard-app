@@ -232,6 +232,12 @@ class DefaultAttendanceRepository @Inject constructor(
         return dao.lastVisitedCheckpointBetween(userId(), from, to)
     }
 
+    override suspend fun hasTimedOutToday(): Boolean {
+        val (from, to) = todayBounds()
+
+        return dao.firstTimeOutBetween(userId(), from, to) != null
+    }
+
     private suspend fun userId(): Long = profiles.observe().first()?.id ?: NO_USER
 
     private fun todayBounds(): Pair<Long, Long> {

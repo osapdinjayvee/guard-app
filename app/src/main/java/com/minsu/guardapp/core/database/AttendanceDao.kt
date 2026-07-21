@@ -231,6 +231,26 @@ interface AttendanceDao {
     suspend fun firstTimeInBetween(userId: Long, fromMillis: Long, toMillis: Long): AttendanceEntity?
 
     /**
+     * The guard's Time Out for a given day, if they have one.
+     *
+     * A shift has a single Time Out; once it exists the shift is closed, and scanning again should
+     * say so rather than offer a second Time Out. Counted locally, like every other rule here, so it
+     * holds at a perimeter post with no signal. A rejected record still counts — the guard did time
+     * out; a rejection is a problem to surface, not a reason to re-open a finished shift.
+     */
+    @Query(
+        """
+        SELECT * FROM attendance
+        WHERE userId = :userId
+          AND attendanceType = 'TIME_OUT'
+          AND capturedAt >= :fromMillis AND capturedAt < :toMillis
+        ORDER BY capturedAt ASC
+        LIMIT 1
+        """
+    )
+    suspend fun firstTimeOutBetween(userId: Long, fromMillis: Long, toMillis: Long): AttendanceEntity?
+
+    /**
      * Patrol visits per post in a window — the round, as this phone knows it.
      *
      * Grouped by checkpoint, because the rule is two visits to *each* post rather than two scans

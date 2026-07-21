@@ -82,9 +82,15 @@ class ScanViewModelTest {
      */
     private fun roster() = FakeRoster(timedInAt = 1L)
 
-    /** What the default (roving) roster permits. */
+    /** What the default (roving) roster permits *before* timing in. */
     private val ROVING_TYPES = listOf(
         AttendanceType.TIME_IN,
+        AttendanceType.CHECKPOINT,
+        AttendanceType.TIME_OUT,
+    )
+
+    /** What a roving guard is offered once they have timed in: no second Time In. */
+    private val POST_TIMEIN_TYPES = listOf(
         AttendanceType.CHECKPOINT,
         AttendanceType.TIME_OUT,
     )
@@ -107,7 +113,7 @@ class ScanViewModelTest {
 
         vm.onCodeScanned("GATE-A")
 
-        assertEquals(ScanState.ChoosingType(gateA, ROVING_TYPES), vm.state.value)
+        assertEquals(ScanState.ChoosingType(gateA, POST_TIMEIN_TYPES), vm.state.value)
     }
 
     /** A retired checkpoint must not read as "unrecognised code". */
@@ -143,7 +149,7 @@ class ScanViewModelTest {
         vm.onCodeScanned("GATE-B")
 
         assertEquals(1, repo.resolveCalls)
-        assertEquals(ScanState.ChoosingType(gateA, ROVING_TYPES), vm.state.value)
+        assertEquals(ScanState.ChoosingType(gateA, POST_TIMEIN_TYPES), vm.state.value)
     }
 
     @Test
@@ -297,7 +303,7 @@ class ScanViewModelTest {
         vm.onCodeScanned("CP-LIBRARY")
 
         val state = vm.state.value as ScanState.ChoosingType
-        assertEquals(ROVING_TYPES, state.allowedTypes)
+        assertEquals(POST_TIMEIN_TYPES, state.allowedTypes)
     }
 
     /** A rest day is not an error, and must not be worded as one. */
@@ -341,12 +347,13 @@ class ScanViewModelTest {
         checkpoints: CheckpointRepository,
         visits: Map<Long, Int> = emptyMap(),
         lastVisited: Long? = null,
+        timedOut: Boolean = false,
         settings: AppSettings = AppSettings(),
         nowMillis: Long = NOON,
     ) = ScanViewModel(
         checkpoints = checkpoints,
         schedule = schedule,
-        attendance = FakeAttendance(visits, lastVisited),
+        attendance = FakeAttendance(visits, lastVisited, timedOut),
         settings = FakeSettings(settings),
         clock = Clock { nowMillis },
     )
@@ -354,6 +361,7 @@ class ScanViewModelTest {
     private class FakeAttendance(
         private val visits: Map<Long, Int>,
         private val lastVisited: Long? = null,
+        private val timedOut: Boolean = false,
     ) : AttendanceRepository {
         override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeOtherAccountUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
@@ -366,6 +374,7 @@ class ScanViewModelTest {
             MutableStateFlow(emptyList())
         override suspend fun checkpointVisitsToday(): Map<Long, Int> = visits
         override suspend fun lastVisitedCheckpointToday(): Long? = lastVisited
+        override suspend fun hasTimedOutToday(): Boolean = timedOut
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
     }
 
@@ -426,7 +435,7 @@ class ScanViewModelTest {
         vm.onCodeScanned("GATE-A")
 
         val state = vm.state.value as ScanState.ChoosingType
-        assertEquals(ROVING_TYPES, state.allowedTypes)
+        assertEquals(POST_TIMEIN_TYPES, state.allowedTypes)
         assertNull(state.notice)
     }
 
@@ -625,5 +634,41 @@ class ScanViewModelTest {
 
         val state = vm.state.value as ScanState.ChoosingType
         assertTrue(AttendanceType.CHECKPOINT in state.allowedTypes)
+    }
+
+    /**
+     * One Time In per shift. A guard who has already clocked on must not be offered Time In again —
+     * a second Time In stacks a new shift on the open one. Only Time Out (and, for a rover, a
+     * checkpoint visit) remain.
+     */
+    @Test
+    fun `a guard who has already timed in is not offered Time In again`() = runTest {
+        val vm = scanner(
+            schedule = FakeRoster(timedInAt = gateA.id),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertFalse("no second Time In once clocked on", AttendanceType.TIME_IN in state.allowedTypes)
+        assertTrue(AttendanceType.TIME_OUT in state.allowedTypes)
+    }
+
+    /**
+     * After Time Out the shift is closed. Scanning says the shift is complete rather than offering
+     * another Time Out — the guard clocks in again only with their next shift.
+     */
+    @Test
+    fun `a guard who has timed out is told the shift is complete, not offered another time out`() = runTest {
+        val vm = scanner(
+            schedule = roster(),
+            checkpoints = FakeCheckpoints(mapOf("GATE-A" to CheckpointResolution.Resolved(gateA))),
+            timedOut = true,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        assertTrue("${vm.state.value}", vm.state.value is ScanState.ShiftComplete)
     }
 }

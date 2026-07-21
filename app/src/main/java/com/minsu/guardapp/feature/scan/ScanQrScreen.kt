@@ -59,6 +59,7 @@ import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.PermissionGate
 import com.minsu.guardapp.ui.theme.SyncFailed
 import com.minsu.guardapp.ui.theme.SyncPending
+import com.minsu.guardapp.ui.theme.SyncSynced
 import java.util.concurrent.Executors
 
 @Composable
@@ -99,6 +100,7 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
             CameraPreview(
                 onCodeScanned = viewModel::onCodeScanned,
                 onCameraReady = { camera = it },
+                scanning = state == ScanState.Scanning,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -184,6 +186,16 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                             "it began, so scan ${current.timedInAt} to time out — not " +
                             "${current.scanned.code}.",
                         colour = SyncFailed,
+                        onDismiss = viewModel::scanAgain,
+                    )
+
+                    // The shift is over. Said as the good news it is — the guard finished — not as a
+                    // refusal, and it names when they can clock on again.
+                    is ScanState.ShiftComplete -> Result(
+                        title = "Shift complete",
+                        body = "You have already timed out today. Your shift is done — time in " +
+                            "again at the start of your next shift.",
+                        colour = SyncSynced,
                         onDismiss = viewModel::scanAgain,
                     )
 
@@ -405,6 +417,7 @@ private fun Result(title: String, body: String, colour: Color, onDismiss: () -> 
 private fun CameraPreview(
     onCodeScanned: (String) -> Unit,
     onCameraReady: (Camera) -> Unit,
+    scanning: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -413,6 +426,12 @@ private fun CameraPreview(
     // Analysis runs off the main thread; a single thread is enough and keeps ordering simple.
     val executor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(Unit) { onDispose { executor.shutdown() } }
+
+    // The analyzer fires once and then latches, so a QR code is resolved a single time. Re-arm it
+    // each time the screen returns to scanning — otherwise "Scan again" after a result leaves the
+    // latch set and the scanner reads nothing, looking broken.
+    val analyzer = remember { QrAnalyzer(onCodeScanned) }
+    LaunchedEffect(scanning) { if (scanning) analyzer.reset() }
 
     Box(modifier, contentAlignment = Alignment.Center) {
         AndroidView(
@@ -432,7 +451,7 @@ private fun CameraPreview(
                         // in view long enough that no frame is worth queueing for.
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
-                        .also { it.setAnalyzer(executor, QrAnalyzer(onCodeScanned)) }
+                        .also { it.setAnalyzer(executor, analyzer) }
 
                     provider.unbindAll()
                     onCameraReady(

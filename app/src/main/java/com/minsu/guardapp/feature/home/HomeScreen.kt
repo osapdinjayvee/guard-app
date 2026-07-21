@@ -43,6 +43,7 @@ import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.GuardProfile
 import com.minsu.guardapp.domain.model.SyncState
 import com.minsu.guardapp.ui.components.GuardCard
+import com.minsu.guardapp.ui.components.HtmlText
 import com.minsu.guardapp.ui.components.QuickAction
 import com.minsu.guardapp.ui.components.SearchField
 import com.minsu.guardapp.ui.components.SectionHeading
@@ -65,7 +66,9 @@ fun HomeRoute(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    HomeScreen(state, onAction = onAction)
+    // Passed as a slot rather than called inside HomeScreen so the stateless screen — and its
+    // @Preview — stay free of the map's hilt-injected ViewModel.
+    HomeScreen(state, onAction = onAction, locationSection = { HomeLocationMapSection() })
 }
 
 @Composable
@@ -73,6 +76,7 @@ fun HomeScreen(
     state: HomeUiState,
     onAction: (HomeAction) -> Unit = {},
     modifier: Modifier = Modifier,
+    locationSection: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -93,12 +97,17 @@ fun HomeScreen(
 
         TodayDutyCard(state.todayDuty, onOpen = { onAction(HomeAction.Schedule) })
 
+        locationSection()
+
         state.maintenanceMessage?.let { MaintenanceBanner(it) }
 
         // Not "Today" — the duty card above already owns that word, and these two cards are about
         // what this handset is holding, not about the shift.
         SectionHeading("On this device")
         SyncCard(state.pendingSyncCount)
+        if (state.otherAccountPendingCount > 0) {
+            OtherAccountNotice(state.otherAccountPendingCount)
+        }
         LastAttendanceCard(state.lastRecord)
 
         if (state.announcements.isNotEmpty()) {
@@ -469,12 +478,39 @@ private fun AnnouncementCard(announcement: Announcement) {
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(4.dp))
-            Text(
+            HtmlText(
                 announcement.content,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/**
+ * Records captured by a *different* guard on this shared phone, waiting for their owner to sign in.
+ *
+ * The sync worker only uploads the current guard's records — a capture must never go up under
+ * another guard's token — so these would otherwise sit invisibly stuck. Named plainly, with the one
+ * action that clears them.
+ */
+@Composable
+private fun OtherAccountNotice(count: Int) {
+    GuardCard {
+        Text(
+            "Records from another account",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "$count attendance ${if (count == 1) "record" else "records"} captured by another guard " +
+                "on this phone ${if (count == 1) "is" else "are"} waiting to upload. Sign in as that " +
+                "guard to sync ${if (count == 1) "it" else "them"}.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

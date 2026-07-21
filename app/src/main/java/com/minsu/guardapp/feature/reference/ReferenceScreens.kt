@@ -38,6 +38,7 @@ import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.ui.components.GuardCard
+import com.minsu.guardapp.ui.components.HtmlText
 import com.minsu.guardapp.ui.components.ScreenTitle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -209,7 +210,7 @@ fun AnnouncementsScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
+                HtmlText(
                     announcement.content,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

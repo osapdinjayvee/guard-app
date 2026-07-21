@@ -57,6 +57,7 @@ import com.minsu.guardapp.R
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.ui.components.GuardCard
+import com.minsu.guardapp.ui.components.LocationMiniMap
 import com.minsu.guardapp.ui.components.PermissionGate
 import com.minsu.guardapp.ui.components.ScreenTitle
 import com.minsu.guardapp.ui.theme.SyncFailed
@@ -164,12 +165,31 @@ private fun LiveCapture(state: SelfieUiState, viewModel: SelfieViewModel, onCanc
                 modifier = Modifier.fillMaxSize(),
             )
 
-            // The same lines that get burned into the file, shown live so the guard can see
-            // what will be recorded. The overlay is cosmetic; the file is the evidence.
-            MetadataOverlay(
-                lines = state.overlayLines,
-                modifier = Modifier.align(Alignment.BottomStart),
-            )
+            // A mini-map of the current fix on the left, the burned-in metadata on the right.
+            // The lines are the same ones written into the file — the overlay is the live preview
+            // of the evidence; the map is a glanceable "you are here" and is preview-only.
+            Row(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                state.fix?.let { fix ->
+                    LocationMiniMap(
+                        latitude = fix.latitude,
+                        longitude = fix.longitude,
+                        modifier = Modifier
+                            .size(104.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                    )
+                }
+                MetadataOverlay(
+                    lines = state.overlayLines,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -211,7 +231,6 @@ private fun LiveCapture(state: SelfieUiState, viewModel: SelfieViewModel, onCanc
 private fun MetadataOverlay(lines: List<String>, modifier: Modifier = Modifier) {
     Column(
         modifier
-            .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.55f))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),

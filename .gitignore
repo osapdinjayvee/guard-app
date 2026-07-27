@@ -20,7 +20,13 @@ local.properties
 # Release signing. The keystore is the app's identity: whoever holds it can ship an update that
 # every installed device will accept as genuine, and Play will refuse a build signed by anything
 # else. It is never committed, and it is backed up somewhere that is not this repository.
-/keystore.properties
+#
+# Matched by prefix rather than exact name, because the near misses are what actually get
+# committed. Setting this up by hand produced a `keystore.properties.txt` (Notepad appending an
+# extension) and a truncated `keystore.prope`, both holding the password in clear text and
+# neither caught by an exact-name rule. Anything at the root called keystore.* is signing
+# material by definition, so ignore the lot.
+/keystore.*
 *.jks
 *.keystore
 

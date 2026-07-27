@@ -89,6 +89,28 @@ Bump rules: a `!` or a `BREAKING CHANGE:` footer → major, `feat` → minor, an
 
 The task refuses to run on a dirty working tree or when the tag already exists. Preview with `-PdryRun`, which prints the bump and the changelog entry and writes nothing.
 
+`version.properties` also carries **`minSupportedVersionCode`**, the oldest build still allowed to run. `release` copies it forward untouched — raising it is a separate, deliberate act that blocks every handset below it (see below), so do it only when older builds genuinely cannot work against the server any more.
+
+### Shipping a release
+
+The app is sideloaded, not distributed through Play, so it checks for its own updates: `GET https://minsu.edu.ph/app/guard-version.json`, compared against `BuildConfig.VERSION_CODE`. Two files have to reach that directory, and `./gradlew packageUpdate` produces both.
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat release              # bumps version.properties + CHANGELOG.md, commits, tags
+git push --follow-tags origin develop
+.\gradlew.bat packageUpdate        # assembleRelease, then guard.apk + guard-version.json
+# upload both from app/build/distribution/ to https://minsu.edu.ph/app/
+```
+
+**Upload `guard.apk` before `guard-version.json`.** In the other order, every handset is briefly told to download a file that 404s.
+
+Never hand-write `guard-version.json`. It is generated from `version.properties` and the APK's real SHA-256, which is the only thing keeping the manifest from claiming a version the APK does not carry. `packageUpdate` fails rather than emitting an unsigned APK, because an unsigned one cannot be installed at all and the failure would otherwise only surface on a guard's phone.
+
+Two server-side requirements: the directory must be **HTTPS** (`usesCleartextTraffic="false"` means plain HTTP is refused), and `guard-version.json` must be served with `Cache-Control: no-cache` — a cached manifest means nobody ever hears about the release.
+
+**The signing key is the whole ballgame.** An update can only install over the existing app if it is signed with the same key, so `keystore.properties` (gitignored, read by `app/build.gradle.kts`) must point at the *same* `.jks` forever. Losing it means no guard can ever be updated again — only uninstall and reinstall, which destroys unsynced attendance. Back it up somewhere that is not this machine. A build signed with a different key than the one already installed cannot replace it; those handsets need **Sync now** first, then uninstall and reinstall.
+
 ### Editing `gradle/libs.versions.toml` on Windows
 
 Windows PowerShell 5.1's `Set-Content`/`Out-File` default to UTF-16, and `-Encoding utf8` writes a **BOM**. A BOM at the top of the TOML breaks the catalog parser (`Unexpected '﻿'`, build fails before anything compiles). Use the Edit/Write tools, or `[IO.File]::WriteAllText(...)`.

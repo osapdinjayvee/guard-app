@@ -160,8 +160,16 @@ abstract class ReleaseTask : DefaultTask() {
         return "$prefix$description ($hash)"
     }
 
-    private fun writeVersion(file: File, versionName: String, versionCode: Int) {
-        // Rewritten by hand rather than via Properties.store() to keep the header comment.
+    private fun writeVersion(
+        file: File,
+        versionName: String,
+        versionCode: Int,
+        minSupportedVersionCode: Int,
+    ) {
+        // Rewritten by hand rather than via Properties.store() to keep the header comment. Which
+        // means every key has to be listed here explicitly: one that is read but not written back
+        // is silently dropped on the next release, and minSupportedVersionCode reverting to its
+        // default would quietly unblock builds the server can no longer serve.
         file.writeText(
             """
             # Single source of truth for the app version.
@@ -169,8 +177,14 @@ abstract class ReleaseTask : DefaultTask() {
             #
             # versionName  semantic version shown to users
             # versionCode  monotonically increasing integer required by the Play Store
+            #
+            # minSupportedVersionCode  the oldest build still allowed to run. Published in the update
+            #   manifest; any installed build below it is blocked until the guard updates. `release` carries
+            #   this value forward untouched — raising it is a deliberate act, and a heavy one, so raise it
+            #   only when older builds genuinely cannot work against the server any more.
             versionName=$versionName
             versionCode=$versionCode
+            minSupportedVersionCode=$minSupportedVersionCode
             """.trimIndent() + "\n"
         )
     }
@@ -191,6 +205,8 @@ abstract class ReleaseTask : DefaultTask() {
             ?: throw GradleException("versionName missing from ${versions.name}")
         val currentCode = properties.getProperty("versionCode")?.toIntOrNull()
             ?: throw GradleException("versionCode missing or non-numeric in ${versions.name}")
+        // Carried through untouched: it is a distribution decision, not a versioning one.
+        val minSupported = properties.getProperty("minSupportedVersionCode")?.toIntOrNull() ?: 1
 
         val lastTag = gitOrNull("describe", "--tags", "--abbrev=0", "--match=v*")
         val commits = parseCommits(lastTag?.let { "$it..HEAD" })
@@ -231,7 +247,7 @@ abstract class ReleaseTask : DefaultTask() {
             return
         }
 
-        writeVersion(versions, nextName, nextCode)
+        writeVersion(versions, nextName, nextCode, minSupported)
 
         val changelog = changelogFile.get().asFile
         val preamble = """

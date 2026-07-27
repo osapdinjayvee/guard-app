@@ -41,21 +41,36 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minsu.guardapp.BuildConfig
 import com.minsu.guardapp.R
+import com.minsu.guardapp.core.update.UpdateStatus
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.GuardProfile
+import com.minsu.guardapp.feature.update.UpdateUiState
+import com.minsu.guardapp.feature.update.UpdateViewModel
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.ScreenTitle
 
 @Composable
-fun AccountScreen(viewModel: AccountViewModel = hiltViewModel()) {
+fun AccountScreen(
+    viewModel: AccountViewModel = hiltViewModel(),
+    updateViewModel: UpdateViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val update by updateViewModel.uiState.collectAsStateWithLifecycle()
+    val updateMessage by updateViewModel.snackbar.collectAsStateWithLifecycle()
     val snackbars = remember { SnackbarHostState() }
 
     LaunchedEffect(message) {
         message?.let {
             snackbars.showSnackbar(it)
             viewModel.messageShown()
+        }
+    }
+
+    LaunchedEffect(updateMessage) {
+        updateMessage?.let {
+            snackbars.showSnackbar(it)
+            updateViewModel.snackbarShown()
         }
     }
 
@@ -91,7 +106,11 @@ fun AccountScreen(viewModel: AccountViewModel = hiltViewModel()) {
 
             CaptureCard(state.settings)
 
-            AboutCard()
+            AboutCard(
+                update = update,
+                isChecking = update.isChecking,
+                onCheckForUpdates = updateViewModel::checkNow,
+            )
 
             GuardCard {
                 AccountRow(
@@ -192,7 +211,7 @@ private fun CaptureCard(settings: AppSettings) {
 }
 
 @Composable
-private fun AboutCard() {
+private fun AboutCard(update: UpdateUiState, isChecking: Boolean, onCheckForUpdates: () -> Unit) {
     GuardCard {
         Text(
             "About",
@@ -203,6 +222,23 @@ private fun AboutCard() {
         Spacer(Modifier.height(8.dp))
         InfoRow("Version", BuildConfig.VERSION_NAME)
         InfoRow("Server", BuildConfig.API_BASE_URL.toHost())
+
+        Divider()
+
+        // The deliberate path. The automatic check is silent by design — it has to be, or a
+        // flaky connection would nag a guard mid-shift — so this is where someone who has been
+        // told an update exists can go and get it.
+        AccountRow(
+            iconRes = R.drawable.ic_send,
+            title = "Check for updates",
+            subtitle = when {
+                isChecking -> "Checking…"
+                update.available != null -> "Version ${update.available?.versionName} is available"
+                update.status is UpdateStatus.UpToDate -> "You're on the latest version"
+                else -> "See whether a newer version has been released"
+            },
+            onClick = onCheckForUpdates,
+        )
     }
 }
 

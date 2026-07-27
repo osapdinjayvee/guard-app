@@ -50,6 +50,16 @@
     synthetic <methods>;
 }
 
+# The update manifest is parsed by the same Moshi and needs the same treatment, but lives outside
+# the dto package because it is not part of the guard API — it is a static file served beside the
+# APK. Its defaults matter more than most: this document is read by builds that are out of date,
+# so a manifest carrying a key they have never heard of must still parse.
+-keep class com.minsu.guardapp.core.update.UpdateManifestDto { *; }
+-keep class com.minsu.guardapp.core.update.UpdateManifestDtoJsonAdapter { *; }
+-keepclassmembers class com.minsu.guardapp.core.update.UpdateManifestDto {
+    synthetic <methods>;
+}
+
 # ---------------------------------------------------------------------------------------------
 # WorkManager.
 #

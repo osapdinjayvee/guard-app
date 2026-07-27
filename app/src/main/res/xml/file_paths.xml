@@ -2,4 +2,7 @@
 <paths>
     <!-- Generated report PDFs live in cache/reports and are shared read-only. -->
     <cache-path name="reports" path="reports/" />
+    <!-- Downloaded APKs, handed to the package installer read-only. Cache, not files: a
+         half-finished download is worth nothing and the system may reclaim it freely. -->
+    <cache-path name="updates" path="updates/" />
 </paths>

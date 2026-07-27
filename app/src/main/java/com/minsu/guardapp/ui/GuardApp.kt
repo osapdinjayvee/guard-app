@@ -1,6 +1,7 @@
 package com.minsu.guardapp.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -10,11 +11,15 @@ import com.minsu.guardapp.core.onboarding.OnboardingPreferences
 import com.minsu.guardapp.core.security.AppLock
 import com.minsu.guardapp.core.security.LockPreferences
 import com.minsu.guardapp.core.session.SessionEvents
+import com.minsu.guardapp.core.update.UpdateStatus
 import com.minsu.guardapp.domain.repository.AuthRepository
 import com.minsu.guardapp.feature.auth.LoginRoute
 import com.minsu.guardapp.feature.lock.LockScreen
 import com.minsu.guardapp.feature.lock.LockSetupScreen
 import com.minsu.guardapp.feature.onboarding.OnboardingScreen
+import com.minsu.guardapp.feature.update.UpdateRequiredScreen
+import com.minsu.guardapp.feature.update.UpdateSheet
+import com.minsu.guardapp.feature.update.UpdateViewModel
 import com.minsu.guardapp.ui.navigation.GuardAppScaffold
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -75,10 +80,29 @@ class AuthGateViewModel @Inject constructor(
  * sign-in the guard is offered the lock once, which they may enable or skip.
  *
  * The queued attendance records survive every transition untouched.
+ *
+ * The update check sits in front of all of it. A build the server has disowned cannot do anything
+ * useful whether or not anyone is signed in, and the manifest is a public file, so the block does
+ * not depend on having a valid token to fetch it.
  */
 @Composable
-fun GuardApp(viewModel: AuthGateViewModel = hiltViewModel()) {
+fun GuardApp(
+    viewModel: AuthGateViewModel = hiltViewModel(),
+    updateViewModel: UpdateViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val update by updateViewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { updateViewModel.checkQuietly() }
+
+    if (update.isRequired) {
+        UpdateRequiredScreen(
+            state = update,
+            onUpdate = updateViewModel::startUpdate,
+            onRetry = updateViewModel::retryDownload,
+        )
+        return
+    }
 
     when (state) {
         // Render nothing for the single frame before DataStore answers, rather than flashing
@@ -88,6 +112,19 @@ fun GuardApp(viewModel: AuthGateViewModel = hiltViewModel()) {
         AuthState.SignedOut -> LoginRoute()
         AuthState.Locked -> LockScreen(onUnlocked = viewModel::unlock)
         AuthState.NeedsLockSetup -> LockSetupScreen()
-        AuthState.SignedIn -> GuardAppScaffold()
+        AuthState.SignedIn -> {
+            GuardAppScaffold()
+
+            // Only over the signed-in app. Interrupting onboarding or a login with a sheet about
+            // versions would be noise at the exact moment the guard is trying to start a shift.
+            if (update.status is UpdateStatus.Available) {
+                UpdateSheet(
+                    state = update,
+                    onUpdate = updateViewModel::startUpdate,
+                    onRetry = updateViewModel::retryDownload,
+                    onDismiss = updateViewModel::dismiss,
+                )
+            }
+        }
     }
 }

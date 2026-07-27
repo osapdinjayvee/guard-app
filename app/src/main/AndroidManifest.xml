@@ -12,6 +12,17 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
+    <!--
+      The app updates itself.
+
+      It is distributed by sideloading, not through Play, so there is no store to notice a new
+      version and no store to install it. The app checks a manifest beside the APK and installs
+      the download itself, which is what this permission is for. Android still asks the guard to
+      allow installs from this app the first time, and still shows its own install confirmation —
+      this grants the right to ask, not the right to install silently.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 

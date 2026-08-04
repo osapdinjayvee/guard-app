@@ -15,6 +15,10 @@ import com.minsu.guardapp.core.database.SyncStatus
 import com.minsu.guardapp.core.network.ApiError
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.dto.AttendanceDto
+import com.minsu.guardapp.domain.model.GuardProfile
+import com.minsu.guardapp.domain.repository.ProfileRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -33,6 +37,13 @@ class AttendanceSyncWorkerTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
     private val t0 = 1_783_663_331_000L
+
+    /** The worker resolves whose records to drain from here; every record() carries userId = 7. */
+    private val profiles = object : ProfileRepository {
+        override fun observe(): Flow<GuardProfile?> = flowOf(GuardProfile(7, "Guard", "guard01"))
+        override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
+        override suspend fun clear() = Unit
+    }
 
     /** Scripted uploader: one result per record id, defaulting to a transient network error. */
     private class FakeUploader(
@@ -89,7 +100,7 @@ class AttendanceSyncWorkerTest {
         val worker = TestListenableWorkerBuilder<AttendanceSyncWorker>(context)
             .setWorkerFactory(object : androidx.work.WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, params: WorkerParameters) =
-                    AttendanceSyncWorker(appContext, params, dao, uploader, Clock { now })
+                    AttendanceSyncWorker(appContext, params, dao, uploader, profiles, Clock { now })
             })
             .build()
         worker.doWork()

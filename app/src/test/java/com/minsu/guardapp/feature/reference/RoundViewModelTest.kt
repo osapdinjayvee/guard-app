@@ -183,6 +183,8 @@ class RoundViewModelTest {
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
         override suspend fun retry(id: String) = Unit
         override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
+        override fun observeRejectedCount(): Flow<Int> = MutableStateFlow(0)
+        override suspend fun discardRejected(): Int = 0
         override suspend fun syncNow(): Int = 0
         override fun observeInRange(
             fromMillis: Long,
@@ -192,5 +194,6 @@ class RoundViewModelTest {
         override suspend fun lastVisitedCheckpointToday(): Long? = null
         override suspend fun hasTimedOutToday(): Boolean = false
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
+        override suspend fun refreshHistory(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 }

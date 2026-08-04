@@ -369,6 +369,8 @@ class ScanViewModelTest {
         override fun observeRecord(id: String): Flow<AttendanceRecord?> = MutableStateFlow(null)
         override suspend fun retry(id: String) = Unit
         override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
+        override fun observeRejectedCount(): Flow<Int> = MutableStateFlow(0)
+        override suspend fun discardRejected(): Int = 0
         override suspend fun syncNow(): Int = 0
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
             MutableStateFlow(emptyList())
@@ -376,6 +378,7 @@ class ScanViewModelTest {
         override suspend fun lastVisitedCheckpointToday(): Long? = lastVisited
         override suspend fun hasTimedOutToday(): Boolean = timedOut
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
+        override suspend fun refreshHistory(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 
     private class FakeSettings(private val settings: AppSettings) : SettingsRepository {

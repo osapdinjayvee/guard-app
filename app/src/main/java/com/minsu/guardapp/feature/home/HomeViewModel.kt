@@ -131,6 +131,10 @@ class HomeViewModel @Inject constructor(
             // Needed at Time Out, which happens at the end of a shift, at a post, with no signal.
             // Cached here for the same reason as the duties and the roster.
             evaluations.refresh()
+            // Pulls back records this device does not have. Matters most on a device that has none
+            // — a reinstall, cleared data, a replacement handset — where History and Reports would
+            // otherwise read as though the guard's attendance had been lost with the app.
+            attendance.refreshHistory()
             _uiState.update { it.copy(isRefreshing = false) }
         }
     }

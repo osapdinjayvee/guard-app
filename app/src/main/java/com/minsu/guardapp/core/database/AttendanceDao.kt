@@ -16,6 +16,22 @@ interface AttendanceDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(record: AttendanceEntity)
 
+    /**
+     * Records downloaded from the server, to refill a device that has none — a reinstall, cleared
+     * app data, a guard issued a new handset.
+     *
+     * IGNORE, emphatically not REPLACE. A row already here is either a capture still waiting to be
+     * uploaded or one this device uploaded itself, and in both cases the local copy is the better
+     * one: it knows the path to the photo on this phone and where the record sits in the sync
+     * queue. Overwriting it with the server's view would mark a pending capture as SYNCED and drop
+     * it from the queue unsent. The download fills gaps; it never overrules what is already here.
+     *
+     * Rows arrive keyed by their `client_uuid`, the same idempotency key they were captured under,
+     * so re-downloading is free and a record uploaded from this device lands back on itself.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDownloaded(records: List<AttendanceEntity>): List<Long>
+
     @Query("SELECT * FROM attendance WHERE id = :id")
     suspend fun byId(id: String): AttendanceEntity?
 
@@ -72,6 +88,46 @@ interface AttendanceDao {
         """
     )
     fun observeStuckCount(userId: Long): Flow<Int>
+
+    /**
+     * Only the permanently refused, without the merely failed.
+     *
+     * [observeStuckCount] deliberately counts both, because to a guard they look the same — nothing
+     * is moving. They are not the same to the queue: a FAILED record has a transient cause and will
+     * go up on the next pass, while a REJECTED one has been given a reason by the server and will
+     * sit there until a human decides what to do with it. Discarding is offered on this count
+     * alone, so a record that was only ever going to need one more attempt cannot be thrown away.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM attendance
+        WHERE userId = :userId AND syncStatus = 'REJECTED'
+        """
+    )
+    fun observeRejectedCount(userId: Long): Flow<Int>
+
+    /** The rejected rows themselves — read before deleting, so their selfies can go with them. */
+    @Query(
+        """
+        SELECT * FROM attendance
+        WHERE userId = :userId AND syncStatus = 'REJECTED'
+        """
+    )
+    suspend fun rejected(userId: Long): List<AttendanceEntity>
+
+    /**
+     * Throws away every rejected record for this guard. Irreversible, and meant to be.
+     *
+     * Scoped by guard for the same reason every read is: another account's stranded records are
+     * their evidence, not this guard's to discard from a shared handset.
+     */
+    @Query(
+        """
+        DELETE FROM attendance
+        WHERE userId = :userId AND syncStatus = 'REJECTED'
+        """
+    )
+    suspend fun deleteRejected(userId: Long): Int
 
     @Query(
         """

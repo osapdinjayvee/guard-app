@@ -1,10 +1,17 @@
 package com.minsu.guardapp.feature.scan
 
 import android.Manifest
+import android.util.Log
+import android.util.Size
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -51,6 +58,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import java.util.concurrent.TimeUnit
 import com.minsu.guardapp.R
 import com.minsu.guardapp.core.camera.QrAnalyzer
 import com.minsu.guardapp.domain.model.AttendanceType
@@ -95,6 +105,26 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
 
             LaunchedEffect(torchOn, camera) {
                 camera?.cameraControl?.enableTorch(torchOn)
+            }
+
+            // Binding use cases directly sets up no focus-metering of its own, and a handset that
+            // parks at a fixed focus until something asks it to hunt serves ML Kit a blurred code
+            // forever — in frame, in focus to the eye, never decoded. Re-arm the centre focus while
+            // we are still looking; the loop stops the moment a code resolves and the state leaves
+            // Scanning, so a working phone triggers this once and moves on.
+            LaunchedEffect(camera, state) {
+                val control = camera?.cameraControl ?: return@LaunchedEffect
+                if (state != ScanState.Scanning) return@LaunchedEffect
+
+                val centre = SurfaceOrientedMeteringPointFactory(1f, 1f).createPoint(0.5f, 0.5f)
+                val focus = FocusMeteringAction.Builder(centre, FocusMeteringAction.FLAG_AF)
+                    .setAutoCancelDuration(REFOCUS_SECONDS, TimeUnit.SECONDS)
+                    .build()
+                while (isActive) {
+                    // Devices that cannot meter reject the action rather than ignoring it.
+                    runCatching { control.startFocusAndMetering(focus) }
+                    delay(TimeUnit.SECONDS.toMillis(REFOCUS_SECONDS))
+                }
             }
 
             CameraPreview(
@@ -441,27 +471,35 @@ private fun CameraPreview(
                 }
                 val providerFuture = ProcessCameraProvider.getInstance(ctx)
                 providerFuture.addListener({
-                    val provider = providerFuture.get()
+                    runCatching {
+                        val provider = providerFuture.get()
 
-                    val preview = Preview.Builder().build().also {
-                        it.surfaceProvider = previewView.surfaceProvider
-                    }
-                    val analysis = ImageAnalysis.Builder()
-                        // Dropping stale frames keeps the preview responsive; a QR code stays
-                        // in view long enough that no frame is worth queueing for.
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
-                        .also { it.setAnalyzer(executor, analyzer) }
+                        val preview = Preview.Builder().build().also {
+                            it.surfaceProvider = previewView.surfaceProvider
+                        }
+                        val analysis = ImageAnalysis.Builder()
+                            // Dropping stale frames keeps the preview responsive; a QR code stays
+                            // in view long enough that no frame is worth queueing for.
+                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .setResolutionSelector(ANALYSIS_RESOLUTION)
+                            .build()
+                            .also { it.setAnalyzer(executor, analyzer) }
 
-                    provider.unbindAll()
-                    onCameraReady(
-                        provider.bindToLifecycle(
-                            lifecycleOwner,
-                            CameraSelector.DEFAULT_BACK_CAMERA,
-                            preview,
-                            analysis,
+                        provider.unbindAll()
+                        onCameraReady(
+                            provider.bindToLifecycle(
+                                lifecycleOwner,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                preview,
+                                analysis,
+                            )
                         )
-                    )
+                    }.onFailure { error ->
+                        // A camera that never binds shows a black screen and nothing else. Say so
+                        // in logcat at least, rather than leaving the guard and whoever they call
+                        // staring at an unexplained void.
+                        Log.e(TAG, "could not start the scanner camera", error)
+                    }
                 }, ContextCompat.getMainExecutor(ctx))
 
                 previewView
@@ -470,6 +508,25 @@ private fun CameraPreview(
         )
     }
 }
+
+/**
+ * Analysis frames default to roughly 640x480, and on a phone with a wide main sensor a checkpoint
+ * sticker held at arm's length lands on too few pixels for ML Kit to resolve the modules — the code
+ * is plainly in frame and simply never decodes, on that handset only. 720p carries enough detail at
+ * that distance while staying inside the preview-plus-analysis combination every device guarantees;
+ * 1080p analysis is not guaranteed on LEGACY camera hardware and can fail to bind outright.
+ */
+private val ANALYSIS_RESOLUTION = ResolutionSelector.Builder()
+    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+    .setResolutionStrategy(
+        ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
+    )
+    .build()
+
+/** Long enough that a focused camera is left alone, short enough that a blurred one recovers. */
+private const val REFOCUS_SECONDS = 3L
+
+private const val TAG = "ScanQrScreen"
 
 private fun AttendanceType.label(): String = when (this) {
     AttendanceType.TIME_IN -> "Time In"

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,10 +28,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -59,6 +64,7 @@ fun AccountScreen(
     val update by updateViewModel.uiState.collectAsStateWithLifecycle()
     val updateMessage by updateViewModel.snackbar.collectAsStateWithLifecycle()
     val snackbars = remember { SnackbarHostState() }
+    var confirmDiscard by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -72,6 +78,37 @@ fun AccountScreen(
             snackbars.showSnackbar(it)
             updateViewModel.snackbarShown()
         }
+    }
+
+    /*
+     * The one destructive action in the app, so it asks first — and says what it is about to
+     * destroy rather than "are you sure?". A guard tapping through a vague dialog at the end of a
+     * shift should still end up understanding that the photographs are going too.
+     */
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Discard ${state.rejectedCount} rejected record(s)?") },
+            text = {
+                Text(
+                    "The server refused these and will refuse them again, so they will never " +
+                        "upload. Deleting them removes the attendance and its selfie from this " +
+                        "phone for good — there is no copy anywhere else.\n\n" +
+                        "Anything merely waiting to upload is left alone.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    viewModel.discardRejected()
+                }) {
+                    Text("Discard", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) { Text("Keep") }
+            },
+        )
     }
 
     Scaffold(
@@ -92,7 +129,11 @@ fun AccountScreen(
 
             ProfileCard(state.profile)
 
-            SyncCard(state, onSyncNow = viewModel::syncNow)
+            SyncCard(
+                state,
+                onSyncNow = viewModel::syncNow,
+                onDiscardRejected = { confirmDiscard = true },
+            )
 
             GuardCard {
                 ToggleRow(
@@ -131,7 +172,11 @@ fun AccountScreen(
  * unsent attendance needs to know that, and needs to be able to do something about it.
  */
 @Composable
-private fun SyncCard(state: AccountUiState, onSyncNow: () -> Unit) {
+private fun SyncCard(
+    state: AccountUiState,
+    onSyncNow: () -> Unit,
+    onDiscardRejected: () -> Unit,
+) {
     GuardCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -176,6 +221,24 @@ private fun SyncCard(state: AccountUiState, onSyncNow: () -> Unit) {
             subtitle = "Upload any queued attendance, and retry anything stuck",
             onClick = onSyncNow,
         )
+
+        /*
+         * Only when the server has actually refused something.
+         *
+         * Hidden the rest of the time on purpose. This is the one control in the app that destroys
+         * an attendance record, and a permanent "Discard" sitting under "Sync now" is a mis-tap
+         * away from deleting a shift that was merely waiting for signal.
+         */
+        if (state.rejectedCount > 0) {
+            Divider()
+
+            AccountRow(
+                iconRes = R.drawable.ic_send,
+                title = "Discard rejected records",
+                subtitle = "Delete the ${state.rejectedCount} the server refused. This cannot be undone.",
+                onClick = onDiscardRejected,
+            )
+        }
     }
 }
 

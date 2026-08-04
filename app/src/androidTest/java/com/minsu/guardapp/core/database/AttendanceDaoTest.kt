@@ -73,7 +73,7 @@ class AttendanceDaoTest {
         val stored = dao.byId("a")!!
         assertEquals(SyncStatus.PENDING, stored.syncStatus)
         assertNull(stored.serverId)
-        assertEquals(1, dao.observeUnsyncedCount().first())
+        assertEquals(1, dao.observeUnsyncedCount(userId = 7).first())
     }
 
     @Test
@@ -102,8 +102,8 @@ class AttendanceDaoTest {
         dao.markFailed("a", error = "timeout", nextAttemptAt = t0 + 60_000, now = t0)
 
         assertEquals(1, dao.byId("a")!!.retryCount)
-        assertTrue("still backing off", dao.eligibleForSync(now = t0 + 30_000).isEmpty())
-        assertEquals("backoff elapsed", 1, dao.eligibleForSync(now = t0 + 60_000).size)
+        assertTrue("still backing off", dao.eligibleForSync(userId = 7, now = t0 + 30_000).isEmpty())
+        assertEquals("backoff elapsed", 1, dao.eligibleForSync(userId = 7, now = t0 + 60_000).size)
     }
 
     /** The orphaned-claim bug: a crash mid-upload must not lose the record. */
@@ -112,14 +112,14 @@ class AttendanceDaoTest {
         dao.insert(record("a"))
         dao.claim("a", now = t0)
         // ...process dies here. The row is SYNCING, which the CAS predicate never re-selects.
-        assertTrue(dao.eligibleForSync(now = t0 + 60_000).isEmpty())
+        assertTrue(dao.eligibleForSync(userId = 7, now = t0 + 60_000).isEmpty())
 
         val swept = dao.reclaimStaleClaims(staleBefore = t0 + 30_000, now = t0 + 60_000)
 
         assertEquals(1, swept)
         assertEquals(SyncStatus.PENDING, dao.byId("a")!!.syncStatus)
         assertNull(dao.byId("a")!!.claimedAt)
-        assertEquals("record is back in the queue", 1, dao.eligibleForSync(now = t0 + 60_000).size)
+        assertEquals("record is back in the queue", 1, dao.eligibleForSync(userId = 7, now = t0 + 60_000).size)
     }
 
     @Test
@@ -144,7 +144,7 @@ class AttendanceDaoTest {
         assertEquals(SyncStatus.REJECTED, stored.syncStatus)
         assertNull("no automatic retry", stored.nextAttemptAt)
         assertEquals("checkpoint_disabled", stored.lastError)
-        assertTrue("never auto-claimed again", dao.eligibleForSync(now = t0 + 10_000_000).isEmpty())
+        assertTrue("never auto-claimed again", dao.eligibleForSync(userId = 7, now = t0 + 10_000_000).isEmpty())
         assertEquals("evidence retained", "/data/user/0/pkg/files/a.jpg", stored.selfiePath)
         assertEquals(0, dao.claim("a", now = t0))
     }
@@ -154,12 +154,12 @@ class AttendanceDaoTest {
         dao.insert(record("a"))
         dao.insert(record("b"))
         dao.insert(record("c"))
-        assertEquals(3, dao.observeUnsyncedCount().first())
+        assertEquals(3, dao.observeUnsyncedCount(userId = 7).first())
 
         dao.claim("a", now = t0); dao.markSynced("a", serverId = 1, now = t0)
         dao.claim("b", now = t0); dao.markRejected("b", error = "out_of_sequence", now = t0)
 
-        assertEquals("only the still-owed record counts", 1, dao.observeUnsyncedCount().first())
+        assertEquals("only the still-owed record counts", 1, dao.observeUnsyncedCount(userId = 7).first())
     }
 
     @Test
@@ -167,7 +167,7 @@ class AttendanceDaoTest {
         dao.insert(record("new", capturedAt = t0 + 5_000))
         dao.insert(record("old", capturedAt = t0))
 
-        val ids = dao.eligibleForSync(now = t0 + 10_000).map { it.id }
+        val ids = dao.eligibleForSync(userId = 7, now = t0 + 10_000).map { it.id }
 
         assertEquals(listOf("old", "new"), ids)
     }

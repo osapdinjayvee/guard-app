@@ -141,7 +141,7 @@ class OfflineAttendanceE2ETest {
                     appContext: Context,
                     workerClassName: String,
                     params: WorkerParameters,
-                ) = AttendanceSyncWorker(appContext, params, dao, uploader, Clock { now })
+                ) = AttendanceSyncWorker(appContext, params, dao, uploader, FakeProfiles(guard), Clock { now })
             })
             .build()
             .doWork()
@@ -244,11 +244,12 @@ class OfflineAttendanceE2ETest {
         // runs its query, and the race never happens.
         val gated = object : AttendanceDao by dao {
             override suspend fun eligibleForSync(
+                userId: Long,
                 now: Long,
                 limit: Int,
                 statuses: List<SyncStatus>,
             ): List<AttendanceEntity> {
-                val rows = dao.eligibleForSync(now, limit, statuses)
+                val rows = dao.eligibleForSync(userId, now, limit, statuses)
                 bothListed.countDown()
                 withContext(Dispatchers.IO) { bothListed.await() }
                 return rows

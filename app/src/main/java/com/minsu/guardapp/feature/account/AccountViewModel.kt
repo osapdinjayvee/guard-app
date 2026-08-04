@@ -29,6 +29,8 @@ data class AccountUiState(
     val pendingCount: Int = 0,
     /** Records the server failed or refused to take. These do not clear themselves. */
     val stuckCount: Int = 0,
+    /** The subset the server refused outright. Only these may be discarded. */
+    val rejectedCount: Int = 0,
     val isSyncing: Boolean = false,
     val settings: AppSettings = AppSettings(),
 ) {
@@ -58,20 +60,30 @@ class AccountViewModel @Inject constructor(
         combine(
             attendance.observeUnsyncedCount(),
             attendance.observeStuckCount(),
+            attendance.observeRejectedCount(),
             scheduler.observeSyncing(),
-        ) { pending, stuck, syncing -> Triple(pending, stuck, syncing) },
+        ) { pending, stuck, rejected, syncing -> QueueState(pending, stuck, rejected, syncing) },
         settings.observe(),
     ) { profile, locked, online, queue, appSettings ->
         AccountUiState(
             profile = profile,
             lockEnabled = locked,
             isOnline = online,
-            pendingCount = queue.first,
-            stuckCount = queue.second,
-            isSyncing = queue.third,
+            pendingCount = queue.pending,
+            stuckCount = queue.stuck,
+            rejectedCount = queue.rejected,
+            isSyncing = queue.syncing,
             settings = appSettings,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AccountUiState())
+
+    /** Four counters that always travel together; a Triple stopped being enough to name them. */
+    private data class QueueState(
+        val pending: Int,
+        val stuck: Int,
+        val rejected: Int,
+        val syncing: Boolean,
+    )
 
     fun setLockEnabled(enabled: Boolean) = viewModelScope.launch {
         lockPreferences.setEnabled(enabled)
@@ -101,6 +113,24 @@ class AccountViewModel @Inject constructor(
                 "You're offline. ${state.pendingCount + state.stuckCount} record(s) will upload as soon as you reconnect."
             requeued > 0 -> "Retrying $requeued record(s) the server would not take."
             else -> "Uploading ${state.pendingCount} record(s)…"
+        }
+    }
+
+    /**
+     * Throw away what the server refused.
+     *
+     * Deliberately narrower than "Sync now": that re-queues FAILED *and* REJECTED, because a retry
+     * costs nothing and might work. This deletes, so it touches only the records that have already
+     * been given a reason and will be given the same one again. A transient failure waiting on
+     * signal is never in scope, whatever the screen happens to be showing.
+     */
+    fun discardRejected() = viewModelScope.launch {
+        val discarded = attendance.discardRejected()
+
+        syncMessage.value = if (discarded > 0) {
+            "Discarded $discarded record(s) the server would not accept."
+        } else {
+            "Nothing to discard."
         }
     }
 

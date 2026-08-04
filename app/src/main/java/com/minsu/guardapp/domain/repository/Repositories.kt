@@ -61,6 +61,20 @@ interface AttendanceRepository {
 
     fun observeHistory(limit: Int = 50): Flow<List<AttendanceRecord>>
 
+    /**
+     * Downloads the guard's own records from the server into the local table.
+     *
+     * History and Reports read only from Room, which is right — they must work in a basement. But
+     * it also means a device with an empty table shows a guard *nothing*, and reads as though their
+     * attendance were lost: clear the app's data, reinstall, or hand them a new phone, and a year of
+     * records simply is not there. The records were never lost; this device had just never been told
+     * about them.
+     *
+     * Fills gaps only. Nothing already on the device is overwritten, so a capture still queued for
+     * upload is never displaced by the server's older view of the world.
+     */
+    suspend fun refreshHistory(): ApiResult<Unit>
+
     /** One record, live: the detail screen follows its sync status as the worker runs. */
     fun observeRecord(id: String): Flow<AttendanceRecord?>
 
@@ -69,6 +83,22 @@ interface AttendanceRepository {
 
     /** Records the server would not take. Never hidden: a rejected attendance is the guard's problem to see. */
     fun observeStuckCount(): Flow<Int>
+
+    /** Of those, the ones the server refused outright. Only these can be discarded. */
+    fun observeRejectedCount(): Flow<Int>
+
+    /**
+     * Throws away every rejected record and its selfie, permanently. Returns how many went.
+     *
+     * The escape hatch of last resort. A rejected record cannot sync — the server has given a
+     * reason and will give the same one again — so without this the count sits on the Account
+     * screen forever, and a guard learns to ignore a warning that never clears. That is worse than
+     * losing the record: it hides the next one.
+     *
+     * Nothing else in the app deletes an attendance. This is not a tidy-up, it is destroying
+     * evidence the server never accepted, and it must stay behind an explicit confirmation.
+     */
+    suspend fun discardRejected(): Int
 
     /**
      * Re-queues every failed or rejected record and drains the queue now. Returns how many were

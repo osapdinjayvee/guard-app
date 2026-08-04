@@ -41,3 +41,4 @@ local.properties
 /.claude-flow/metrics/
 /.claude/.proven-config-version
 /.claude/proven-config.json
+.issues

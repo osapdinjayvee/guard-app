@@ -4,6 +4,11 @@ import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.core.database.AttendanceDao
 import com.minsu.guardapp.core.database.AttendanceEntity
 import com.minsu.guardapp.core.database.SyncStatus
+import com.minsu.guardapp.core.network.ApiErrorMapper
+import com.minsu.guardapp.core.network.GuardApi
+import com.minsu.guardapp.core.network.dto.AttendanceDto
+import com.minsu.guardapp.core.network.dto.PageMetaDto
+import com.minsu.guardapp.core.network.dto.PagedEnvelope
 import com.minsu.guardapp.core.sync.SyncScheduler
 import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceType
@@ -24,12 +29,26 @@ class AttendanceSubmitTest {
     private class RecordingDao : AttendanceDao {
         val inserted = mutableListOf<AttendanceEntity>()
         override suspend fun insert(record: AttendanceEntity) { inserted += record }
+        /** Mirrors Room's IGNORE: an id already present is left exactly as it was. */
+        override suspend fun insertDownloaded(records: List<AttendanceEntity>): List<Long> =
+            records.map { record ->
+                if (inserted.any { it.id == record.id }) -1L
+                else { inserted += record; 1L }
+            }
         override suspend fun byId(id: String) = inserted.firstOrNull { it.id == id }
         override fun observeById(id: String): Flow<AttendanceEntity?> = MutableStateFlow(inserted.firstOrNull { it.id == id })
         override suspend fun requeue(id: String, now: Long) = 0
         var requeueAllCalls = 0
         override suspend fun requeueAll(now: Long): Int { requeueAllCalls++; return 0 }
         override fun observeStuckCount(userId: Long): Flow<Int> = MutableStateFlow(0)
+        override fun observeRejectedCount(userId: Long): Flow<Int> = MutableStateFlow(0)
+        override suspend fun rejected(userId: Long): List<AttendanceEntity> =
+            inserted.filter { it.userId == userId && it.syncStatus == SyncStatus.REJECTED }
+        override suspend fun deleteRejected(userId: Long): Int {
+            val doomed = inserted.filter { it.userId == userId && it.syncStatus == SyncStatus.REJECTED }
+            inserted.removeAll(doomed.toSet())
+            return doomed.size
+        }
         override fun observeInRange(userId: Long, fromMillis: Long, toMillis: Long): Flow<List<AttendanceEntity>> =
             MutableStateFlow(inserted.filter { it.userId == userId })
         override fun observePage(userId: Long, limit: Int, offset: Int): Flow<List<AttendanceEntity>> =
@@ -107,14 +126,42 @@ class AttendanceSubmitTest {
         dutiesVersionId = 12,
     )
 
-    private fun repo(dao: AttendanceDao, scheduler: SyncScheduler, profile: GuardProfile?) =
-        DefaultAttendanceRepository(
-            dao,
-            FakeProfiles(profile),
-            scheduler,
-            EvaluationJson(com.squareup.moshi.Moshi.Builder().build()),
-            Clock { 5_000L },
-        )
+    /** A stored record, pared down to the three things the discard rules turn on. */
+    private fun entity(id: String, userId: Long, status: SyncStatus) = AttendanceEntity(
+        id = id,
+        userId = userId,
+        checkpointId = 1,
+        checkpointCode = "GATE-A",
+        attendanceType = com.minsu.guardapp.core.database.AttendanceType.TIME_IN,
+        // A path that does not exist. Deleting it is expected to fail harmlessly — the row must go
+        // regardless, or a missing photo would strand the record it belongs to forever.
+        selfiePath = "/no/such/file/$id.jpg",
+        capturedAt = 1_783_663_331_000,
+        latitude = 14.599512,
+        longitude = 120.984222,
+        accuracy = 8.4f,
+        dutiesAcknowledged = false,
+        dutiesVersionId = null,
+        deviceId = null,
+        syncStatus = status,
+        createdAt = 1_783_663_331_000,
+        updatedAt = 1_783_663_331_000,
+    )
+
+    private fun repo(
+        dao: AttendanceDao,
+        scheduler: SyncScheduler,
+        profile: GuardProfile?,
+        api: GuardApi = FakeGuardApi(),
+    ) = DefaultAttendanceRepository(
+        dao,
+        FakeProfiles(profile),
+        scheduler,
+        EvaluationJson(com.squareup.moshi.Moshi.Builder().build()),
+        api,
+        ApiErrorMapper(com.squareup.moshi.Moshi.Builder().build()),
+        Clock { 5_000L },
+    )
 
     /**
      * "Sync now" has to do both halves. Re-queueing without draining leaves the records sitting
@@ -153,6 +200,59 @@ class AttendanceSubmitTest {
         assertFalse("nothing is acknowledged any more", record.dutiesAcknowledged)
         assertEquals(12L, record.dutiesVersionId)
         assertEquals(1, scheduler.syncRequests)
+    }
+
+    /**
+     * Discarding takes the rejected and nothing else.
+     *
+     * This is the only place in the app that destroys an attendance, so the boundary matters more
+     * than the deletion does. PENDING is still going up; FAILED is a transient cause that the next
+     * pass may well clear. Only REJECTED has been given a reason by the server and will be given
+     * the same one forever.
+     */
+    @Test
+    fun `discard removes rejected records and leaves everything else`() = runTest {
+        val dao = RecordingDao()
+        dao.inserted += entity("pending", 7, SyncStatus.PENDING)
+        dao.inserted += entity("failed", 7, SyncStatus.FAILED)
+        dao.inserted += entity("rejected-1", 7, SyncStatus.REJECTED)
+        dao.inserted += entity("rejected-2", 7, SyncStatus.REJECTED)
+        dao.inserted += entity("synced", 7, SyncStatus.SYNCED)
+
+        val discarded = repo(dao, RecordingScheduler(), GuardProfile(7, "Juan", "guard01"))
+            .discardRejected()
+
+        assertEquals(2, discarded)
+        assertEquals(
+            listOf("pending", "failed", "synced"),
+            dao.inserted.map { it.id },
+        )
+    }
+
+    /** A shared handset. Another guard's stranded records are their evidence, not this one's. */
+    @Test
+    fun `discard leaves another account's rejected records alone`() = runTest {
+        val dao = RecordingDao()
+        dao.inserted += entity("mine", 7, SyncStatus.REJECTED)
+        dao.inserted += entity("theirs", 9, SyncStatus.REJECTED)
+
+        val discarded = repo(dao, RecordingScheduler(), GuardProfile(7, "Juan", "guard01"))
+            .discardRejected()
+
+        assertEquals(1, discarded)
+        assertEquals(listOf("theirs"), dao.inserted.map { it.id })
+    }
+
+    /** Signed out, every read is scoped to an id no guard has. Deleting must respect that too. */
+    @Test
+    fun `discard deletes nothing when nobody is signed in`() = runTest {
+        val dao = RecordingDao()
+        dao.inserted += entity("rejected", 7, SyncStatus.REJECTED)
+
+        val discarded = repo(dao, RecordingScheduler(), profile = null).discardRejected()
+
+        assertEquals(0, discarded)
+        assertEquals(1, dao.inserted.size)
     }
 
     /** The id is the idempotency key, so the caller-supplied UUID must be the primary key. */
@@ -224,6 +324,112 @@ class AttendanceSubmitTest {
         assertEquals(setOf("first-key", "second-key"), dao.inserted.map { it.id }.toSet())
         assertTrue("both belong to the same guard", dao.inserted.all { it.userId == 7L })
     }
+
+    /**
+     * Clear the app's data, sign back in, and a guard's history must come back.
+     *
+     * History and Reports read only from Room, so a device that has never been told about a record
+     * shows the guard nothing and reads as though their attendance had been lost with the app. It
+     * had not been: the server has it, and this is what fetches it.
+     */
+    @Test
+    fun `history is downloaded onto a device that has none`() = runTest {
+        val dao = RecordingDao()
+        val api = object : FakeGuardApi() {
+            override suspend fun history(page: Int, perPage: Int) =
+                PagedEnvelope(
+                    data = listOf(serverRecord("uuid-1"), serverRecord("uuid-2", id = 502)),
+                    meta = PageMetaDto(page = 1, perPage = 100, total = 2),
+                )
+        }
+
+        val result = repo(dao, RecordingScheduler(), GuardProfile(7, "Juan", "guard01"), api)
+            .refreshHistory()
+
+        assertTrue(result is ApiResult.Success)
+        assertEquals("both server records must land locally", 2, dao.inserted.size)
+        val restored = dao.inserted.first { it.id == "uuid-1" }
+        // Already on the server by definition, so it must never re-enter the upload queue.
+        assertEquals(SyncStatus.SYNCED, restored.syncStatus)
+        assertEquals(501L, restored.serverId)
+        assertEquals(7L, restored.userId)
+        assertEquals("GATE-A", restored.checkpointCode)
+    }
+
+    /**
+     * The download fills gaps; it does not overrule the device.
+     *
+     * A capture still queued for upload is the one piece of state the server cannot know about, and
+     * it holds the path to the photo on this phone. Letting the server's view replace it would mark
+     * the record SYNCED, drop it out of the queue, and lose an attendance that was never uploaded —
+     * the exact failure the offline-first write path exists to prevent.
+     */
+    @Test
+    fun `a downloaded record never displaces one still waiting to upload`() = runTest {
+        val dao = RecordingDao()
+        val scheduler = RecordingScheduler()
+        val repository = repo(dao, scheduler, GuardProfile(7, "Juan", "guard01"), object : FakeGuardApi() {
+            override suspend fun history(page: Int, perPage: Int) =
+                PagedEnvelope(
+                    data = listOf(serverRecord("local-capture")),
+                    meta = PageMetaDto(page = 1, perPage = 100, total = 1),
+                )
+        })
+
+        repository.submit("local-capture", draft)
+        repository.refreshHistory()
+
+        val record = dao.inserted.single { it.id == "local-capture" }
+        assertEquals("the queued capture must survive untouched", SyncStatus.PENDING, record.syncStatus)
+        assertEquals("its local photo must not be swapped for a URL", draft.selfiePath, record.selfiePath)
+    }
+
+    /** Paging stops as soon as the server has no more to give, rather than running to the ceiling. */
+    @Test
+    fun `the backfill stops once every record has been fetched`() = runTest {
+        var pagesRequested = 0
+        val api = object : FakeGuardApi() {
+            override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> {
+                pagesRequested++
+                return PagedEnvelope(
+                    data = listOf(serverRecord("uuid-$page", id = page.toLong())),
+                    meta = PageMetaDto(page = page, perPage = 1, total = 2),
+                )
+            }
+        }
+
+        repo(RecordingDao(), RecordingScheduler(), GuardProfile(7, "Juan", "guard01"), api)
+            .refreshHistory()
+
+        assertEquals("two records at one per page is two requests, not more", 2, pagesRequested)
+    }
+
+    /** Nobody signed in means nobody to file the records under, so none are fetched. */
+    @Test
+    fun `no history is downloaded when nobody is signed in`() = runTest {
+        // FakeGuardApi throws on any unstubbed endpoint, so reaching the network fails this outright.
+        val result = repo(RecordingDao(), RecordingScheduler(), profile = null).refreshHistory()
+
+        assertTrue(result is ApiResult.Success)
+    }
+
+    private fun serverRecord(clientUuid: String, id: Long = 501) = AttendanceDto(
+        id = id,
+        clientUuid = clientUuid,
+        userId = 7,
+        checkpointId = 1,
+        checkpointCode = "GATE-A",
+        attendanceType = "time_in",
+        selfieUrl = "https://guard.example/storage/selfies/$clientUuid.jpg",
+        capturedAt = "2026-07-20T11:00:21+08:00",
+        receivedAt = "2026-07-20T11:00:25+08:00",
+        latitude = 14.599512,
+        longitude = 120.984222,
+        accuracy = 8.4f,
+        dutiesAcknowledged = false,
+        dutiesVersionId = 12,
+        deviceId = null,
+    )
 
     @Test
     fun `a null fix is stored as null coordinates, not zero`() = runTest {

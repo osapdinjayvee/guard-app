@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import java.io.File
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -159,6 +160,8 @@ class DefaultAttendanceRepository @Inject constructor(
     private val profiles: ProfileRepository,
     private val syncScheduler: SyncScheduler,
     private val evaluations: EvaluationJson,
+    private val api: GuardApi,
+    private val errors: ApiErrorMapper,
     private val clock: Clock,
 ) : AttendanceRepository {
 
@@ -188,6 +191,28 @@ class DefaultAttendanceRepository @Inject constructor(
     override fun observeRecord(id: String): Flow<AttendanceRecord?> =
         dao.observeById(id).map { it?.toDomain() }
 
+    override suspend fun refreshHistory(): ApiResult<Unit> {
+        // Nothing to attribute the records to, and every read is scoped by guard id, so downloading
+        // now would file them under -1 and show them to nobody.
+        if (userId() == NO_USER) return ApiResult.Success(Unit)
+
+        var page = 1
+        while (page <= MAX_HISTORY_PAGES) {
+            val result = errors.call { api.history(page = page, perPage = HISTORY_PAGE_SIZE) }
+            if (result !is ApiResult.Success) return result.map { }
+
+            val now = clock.nowMillis()
+            // mapNotNull: a record this build cannot read is skipped, not fatal. Losing one row to a
+            // format change must not cost the guard the other several hundred.
+            dao.insertDownloaded(result.value.data.mapNotNull { it.toEntity(now) })
+
+            val meta = result.value.meta
+            if (page * meta.perPage >= meta.total) break
+            page++
+        }
+        return ApiResult.Success(Unit)
+    }
+
     override suspend fun retry(id: String) {
         // Only re-queue if the record was actually in a retriable-by-hand state; requesting a
         // sync for a record that did not move would just spin the worker for nothing.
@@ -196,6 +221,28 @@ class DefaultAttendanceRepository @Inject constructor(
 
     override fun observeStuckCount(): Flow<Int> =
         currentUserId().flatMapLatest { dao.observeStuckCount(it) }
+
+    override fun observeRejectedCount(): Flow<Int> =
+        currentUserId().flatMapLatest { dao.observeRejectedCount(it) }
+
+    /**
+     * The selfies go first, then the rows.
+     *
+     * In that order deliberately. A file deleted whose row survives is a record pointing at a
+     * photograph that is gone — it would still be listed, still be retried, and fail on an upload
+     * that can never find its image. A row deleted whose file survives is only wasted bytes in the
+     * cache. If this is interrupted halfway, the second is the failure to have.
+     */
+    override suspend fun discardRejected(): Int {
+        val userId = userId()
+        if (userId == NO_USER) return 0
+
+        dao.rejected(userId).forEach { record ->
+            runCatching { File(record.selfiePath).delete() }
+        }
+
+        return dao.deleteRejected(userId)
+    }
 
     /**
      * Unlike [retry], this always drains — even when nothing was stuck. The queue may hold records
@@ -303,3 +350,13 @@ class DefaultAttendanceRepository @Inject constructor(
 
 /** An id no guard has. Scopes a query to nobody rather than to everybody when nobody is signed in. */
 private const val NO_USER = -1L
+
+private const val HISTORY_PAGE_SIZE = 100
+
+/**
+ * A ceiling on the backfill, not a page budget for a working device: the loop stops as soon as the
+ * server says there are no more records, so a guard with two months of history costs one or two
+ * requests. It exists so that a guard with years of them cannot turn a first login into a hundred
+ * round trips on a phone tethered to a perimeter post.
+ */
+private const val MAX_HISTORY_PAGES = 10

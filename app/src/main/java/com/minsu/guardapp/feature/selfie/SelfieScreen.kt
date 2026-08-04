@@ -112,8 +112,9 @@ fun SelfieScreen(
 
                 captured != null -> CapturedPreview(
                     path = captured.absolutePath,
-                    // A Time Out goes on to the questions; everything else is being submitted, and
-                    // the button says so rather than promising a step that does not exist.
+                    // A shift boundary goes on to the questions; a checkpoint visit is being
+                    // submitted, and the button says so rather than promising a step that does
+                    // not exist.
                     continueLabel = if (state.needsEvaluation) "Continue" else "Submit",
                     busy = state.isSubmitting,
                     onRetake = viewModel::retake,
@@ -354,14 +355,15 @@ private fun CapturedPreview(
 }
 
 /**
- * Step 2, on a Time Out: the post-shift self-evaluation.
+ * Step 2, at either end of a shift: the self-evaluation.
  *
  * One question at a time, Yes or No, two large targets. A guard answers this at the end of a twelve
  * hour shift, tired and wanting to go home, and a seven-item form on one screen collects a column of
- * identical taps that is evidence of nothing. One question filling the screen is one decision.
+ * identical taps that is evidence of nothing. One question filling the screen is one decision. The
+ * same is true at 6am with the shift still ahead of them.
  *
- * A Time In and a roving guard's checkpoint visits never see this: an evaluation describes a shift
- * that has *ended*.
+ * A roving guard's checkpoint visits never see this: a visit happens mid-round and describes no
+ * boundary of the shift.
  */
 @Composable
 private fun ShiftEvaluation(
@@ -408,7 +410,7 @@ private fun ShiftEvaluation(
         }
 
         Text(
-            "End of shift",
+            if (state.type == AttendanceType.TIME_IN) "Start of shift" else "End of shift",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,

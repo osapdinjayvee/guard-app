@@ -3,11 +3,19 @@ package com.minsu.guardapp.core.network.dto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/** One yes/no question of the post-shift self-evaluation, as served by `GET /api/evaluation-questions`. */
+/** One yes/no question of the self-evaluation, as served by `GET /api/evaluation-questions`. */
 @JsonClass(generateAdapter = true)
 data class EvaluationQuestionDto(
     @Json(name = "id") val id: Long,
     @Json(name = "question") val question: String,
+    /**
+     * `time_in`, `time_out` or `both` — which end of the shift the office asks this at.
+     *
+     * Defaulted rather than required. The whole set is downloaded in one call and filtered on the
+     * device, so a server that has not been updated to send the field still yields a working
+     * post-shift evaluation instead of an empty one.
+     */
+    @Json(name = "type") val type: String? = null,
     @Json(name = "sort_order") val sortOrder: Int = 0,
 )
 

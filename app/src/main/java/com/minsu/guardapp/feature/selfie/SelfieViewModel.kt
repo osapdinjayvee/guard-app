@@ -60,10 +60,13 @@ data class SelfieUiState(
     val duty: Duty? = null,
 
     /**
-     * The post-shift self-evaluation, on a Time Out.
+     * The self-evaluation for this end of the shift.
      *
-     * Empty for a Time In or a checkpoint visit: an evaluation describes a shift that has *ended*,
-     * and one attached to a Time In would be a claim about a shift that had not happened yet.
+     * A Time In asks whether the guard is fit to start — uniform, equipment, briefing. A Time Out
+     * asks how it went. Which questions belong to which end is the office's decision, carried on
+     * each question's timing; a question marked for both is asked twice, and the pair is the point.
+     *
+     * Empty for a checkpoint visit, which happens mid-round and describes no boundary.
      */
     val questions: List<EvaluationQuestion> = emptyList(),
     /** Answers so far, keyed by question. One question is put at a time; this is what has been said. */
@@ -84,7 +87,8 @@ data class SelfieUiState(
     val error: String? = null,
 ) {
     /**
-     * A Time Out is the only capture that carries an evaluation, because it is the only ending.
+     * Both ends of a shift carry an evaluation. A checkpoint visit does not: it happens mid-round
+     * and describes no boundary.
      *
      * Note what this does *not* say: `&& questions.isNotEmpty()`. It used to, and that was a hole.
      * A phone with no cached questions concluded that no evaluation was needed, submitted a Time Out
@@ -95,11 +99,22 @@ data class SelfieUiState(
      * it does not have them, that is a problem to say out loud, not to answer by skipping the step.
      */
     val needsEvaluation: Boolean
-        get() = type == AttendanceType.TIME_OUT
+        get() = type == AttendanceType.TIME_IN || type == AttendanceType.TIME_OUT
 
-    /** A Time Out with nothing to ask, and no way to know whether that is real. Blocked, and said. */
+    /**
+     * Nothing to ask, and no way to know whether that is real. Blocked, and said — but only at the
+     * end of a shift.
+     *
+     * A Time Out is blocked because the server *requires* the answers: submitting without them
+     * produces a permanent rejection, so stopping here and saying why is the kinder failure.
+     *
+     * A Time In is not blocked, and that asymmetry is deliberate. The server accepts a Time In
+     * without an evaluation, and a guard who cannot clock in cannot work. Refusing to open a shift
+     * because a question list failed to download would turn a missing nicety into a guard standing
+     * at a gate unable to start — a far worse outcome than a pre-evaluation nobody recorded.
+     */
     val missingQuestions: Boolean
-        get() = needsEvaluation && questions.isEmpty() && !questionsKnownEmpty
+        get() = type == AttendanceType.TIME_OUT && questions.isEmpty() && !questionsKnownEmpty
 
     /** The question currently being put to the guard, or null when they have answered them all. */
     val currentQuestion: EvaluationQuestion?
@@ -118,9 +133,13 @@ data class SelfieUiState(
     val evaluationComplete: Boolean
         get() = when {
             !needsEvaluation -> true
-            // Genuinely nothing to ask: the office retired every question. Not a reason to leave a
-            // guard unable to clock out of a shift they have finished.
-            questions.isEmpty() -> questionsKnownEmpty
+            // Genuinely nothing to ask: the office retired every question, or asks none at this end
+            // of the shift. Not a reason to leave a guard unable to open or close one.
+            //
+            // At Time In an *unknown* empty set also passes, for the reason given on
+            // [missingQuestions]: the server does not require the answers, and a guard who cannot
+            // clock in cannot work.
+            questions.isEmpty() -> questionsKnownEmpty || type == AttendanceType.TIME_IN
             else -> questions.all { it.id in answers }
         }
 
@@ -255,9 +274,9 @@ class SelfieViewModel @Inject constructor(
                     guardName = profiles.observe().first()?.name.orEmpty(),
                     settings = settingsNow,
                     duty = duties.activeDuty(),
-                    // Only a Time Out is asked. Read from the cache, so the questions are there at
-                    // the end of a shift at a perimeter post with no signal.
-                    questions = if (type == AttendanceType.TIME_OUT) evaluations.questions() else emptyList(),
+                    // Whichever set belongs to this end of the shift. Read from the cache, so the
+                    // questions are there at a perimeter post with no signal.
+                    questions = type?.let { evaluations.questions(it) }.orEmpty(),
                     nowMillis = clock.nowMillis(),
                 )
             }
@@ -267,13 +286,14 @@ class SelfieViewModel @Inject constructor(
         // this is the last moment anyone is looking. Try once; if it fails, the guard is told plainly
         // rather than being walked into a submission the server will refuse.
         sessionJobs += viewModelScope.launch {
-            if (type != AttendanceType.TIME_OUT) return@launch
-            if (evaluations.questions().isNotEmpty()) return@launch
+            val captureType = type ?: return@launch
+            if (captureType == AttendanceType.CHECKPOINT) return@launch
+            if (evaluations.questions(captureType).isNotEmpty()) return@launch
 
-            // A successful refresh that comes back empty is an *answer*: this campus asks nothing.
-            // A failed one tells us only that we still do not know.
+            // A successful refresh that comes back empty is an *answer*: this campus asks nothing
+            // at this end of the shift. A failed one tells us only that we still do not know.
             val refreshed = evaluations.refresh()
-            val questions = evaluations.questions()
+            val questions = evaluations.questions(captureType)
 
             _uiState.update {
                 it.copy(

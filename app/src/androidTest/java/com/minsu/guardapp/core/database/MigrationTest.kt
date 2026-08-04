@@ -113,7 +113,10 @@ class MigrationTest {
             )
         }
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, *GUARD_MIGRATIONS)
+        // The *current* version, not a number that was current once. Left behind at 5 while the
+        // schema moved on, this test would keep passing while validating nothing about the last
+        // two migrations.
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, *GUARD_MIGRATIONS)
 
         db.query("SELECT id, syncStatus FROM attendance").use { c ->
             assertTrue("the unsynced attendance survived every migration", c.moveToFirst())
@@ -145,6 +148,35 @@ class MigrationTest {
         db.query("SELECT evaluationsJson FROM attendance").use { c ->
             assertTrue(c.moveToFirst())
             assertTrue("a record from before the evaluation existed carries none", c.isNull(0))
+        }
+    }
+
+    /**
+     * The evaluation question timing, added by 6->7.
+     *
+     * The backfill is the whole point. Every question cached before this column existed was asked
+     * at the end of the shift, and the default has to say so — a question that migrated to
+     * `TIME_IN` would start being put to guards as they arrived, asking them to report on a shift
+     * they had not worked yet. Wrong at the wrong moment, and on the phone only, until the next
+     * refresh happened to correct it.
+     */
+    @Test
+    fun migrating_6_to_7_leaves_existing_questions_at_the_end_of_the_shift() {
+        helper.createDatabase(TEST_DB, 6).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO evaluation_questions (id, question, sortOrder, updatedAt)
+                VALUES (1, 'Was the logbook handed over properly?', 0, 1783663331000)
+                """.trimIndent()
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, *GUARD_MIGRATIONS)
+
+        db.query("SELECT question, timing FROM evaluation_questions").use { c ->
+            assertTrue("the cached question survived", c.moveToFirst())
+            assertEquals("Was the logbook handed over properly?", c.getString(0))
+            assertEquals("TIME_OUT", c.getString(1))
         }
     }
 

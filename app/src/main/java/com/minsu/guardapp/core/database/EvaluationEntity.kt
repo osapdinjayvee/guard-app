@@ -8,7 +8,7 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 /**
- * A post-shift self-evaluation question, cached.
+ * A self-evaluation question, cached.
  *
  * Cached for the same reason as everything else: a guard closing a shift at a perimeter post has no
  * more signal than one opening it, and a Time Out that cannot be completed because the questions
@@ -18,6 +18,11 @@ import kotlinx.coroutines.flow.Flow
 data class EvaluationQuestionEntity(
     @PrimaryKey val id: Long,
     val question: String,
+    /**
+     * `TIME_IN`, `TIME_OUT` or `BOTH`. Stored as text, filtered in the repository rather than in
+     * SQL, because the set is a handful of rows and `BOTH` would otherwise need an IN on every read.
+     */
+    val timing: String,
     val sortOrder: Int,
     val updatedAt: Long,
 )

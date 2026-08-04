@@ -143,7 +143,7 @@ class SelfieViewModelResetTest {
     }
 
     private class FakeEvaluations : EvaluationRepository {
-        override suspend fun questions(): List<EvaluationQuestion> = emptyList()
+        override suspend fun questions(type: AttendanceType): List<EvaluationQuestion> = emptyList()
         override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 
@@ -170,5 +170,6 @@ class SelfieViewModelResetTest {
         override suspend fun lastVisitedCheckpointToday(): Long? = null
         override suspend fun hasTimedOutToday(): Boolean = false
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
+        override suspend fun refreshHistory(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 }

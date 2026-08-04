@@ -13,6 +13,7 @@ import com.minsu.guardapp.core.database.AttendanceEntity
 import com.minsu.guardapp.core.database.GuardDatabase
 import com.minsu.guardapp.core.database.SyncStatus
 import com.minsu.guardapp.core.network.ApiError
+import com.minsu.guardapp.core.network.ApiErrorMapper
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.dto.AttendanceDto
 import com.minsu.guardapp.data.DefaultAttendanceRepository
@@ -110,6 +111,10 @@ class OfflineAttendanceE2ETest {
             FakeProfiles(guard),
             scheduler,
             EvaluationJson(com.squareup.moshi.Moshi.Builder().build()),
+            // Every endpoint throws. The point of this test is the offline write path, so a call
+            // reaching the network here is the failure, not an inconvenience — and it names itself.
+            com.minsu.guardapp.data.FakeGuardApi(),
+            ApiErrorMapper(com.squareup.moshi.Moshi.Builder().build()),
             Clock { now },
         )
 

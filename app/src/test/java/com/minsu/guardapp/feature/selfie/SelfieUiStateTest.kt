@@ -204,15 +204,37 @@ class SelfieUiStateTest {
     }
 
     /**
-     * An evaluation describes a shift that has *ended*. Attached to a Time In it would be a claim
-     * about a shift that had not happened yet — and the server rejects it outright.
+     * Both ends of a shift are evaluated. The Time In set asks whether the guard is fit to start.
+     *
+     * This used to assert the opposite — that a Time In carried nothing — because the questions
+     * had no timing and every one of them described a shift that had ended. Now the office marks
+     * each question with the end it belongs to, and a Time In is asked its own.
      */
     @Test
-    fun `a time in carries no evaluation and submits on the photo alone`() {
+    fun `a time in is asked its questions and cannot submit until they are answered`() {
         val timeIn = capturedState(type = AttendanceType.TIME_IN, questions = questions)
 
-        assertFalse(timeIn.needsEvaluation)
-        assertTrue("nothing to ask, so nothing to block", timeIn.canSubmit)
+        assertTrue(timeIn.needsEvaluation)
+        assertEquals(questions[0], timeIn.currentQuestion)
+        assertFalse("a half-answered pre-shift check is not a shorter one", timeIn.canSubmit)
+
+        val answered = timeIn.copy(answers = questions.associate { it.id to true })
+        assertTrue(answered.canSubmit)
+    }
+
+    /**
+     * A Time In is never blocked by questions that failed to download.
+     *
+     * The server accepts a Time In without an evaluation, and a guard who cannot clock in cannot
+     * work. A Time Out is blocked in the same situation, because there the server *requires* the
+     * answers and submitting without them earns a permanent rejection — see the test below.
+     */
+    @Test
+    fun `a time in with no downloaded questions still opens the shift`() {
+        val timeIn = capturedState(type = AttendanceType.TIME_IN, questions = emptyList())
+
+        assertFalse("clocking in must not depend on a question list", timeIn.missingQuestions)
+        assertTrue(timeIn.canSubmit)
     }
 
     /** Nor does a roving guard's patrol visit: it is a passing-through, not an ending. */

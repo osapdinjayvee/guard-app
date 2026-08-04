@@ -5,6 +5,7 @@ import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceRecord
+import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.Duty
@@ -198,14 +199,20 @@ interface ScheduleRepository {
 }
 
 /**
- * The post-shift self-evaluation questions.
+ * The self-evaluation questions, for both ends of a shift.
  *
  * Cached, because a guard closing a shift at a perimeter post has no more signal than one opening
  * it — and a Time Out they cannot complete is a shift they cannot clock out of.
  */
 interface EvaluationRepository {
-    /** In the order the office wants them asked. */
-    suspend fun questions(): List<EvaluationQuestion>
+    /**
+     * The questions asked at [type], in the order the office wants them asked.
+     *
+     * The whole set is downloaded in one call and filtered here rather than fetched per type: a
+     * guard opens a shift with signal and closes it without, so the Time Out questions have to
+     * already be on the phone by the time they are needed.
+     */
+    suspend fun questions(type: AttendanceType): List<EvaluationQuestion>
 
     suspend fun refresh(): ApiResult<Unit>
 }

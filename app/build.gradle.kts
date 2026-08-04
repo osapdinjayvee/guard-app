@@ -134,6 +134,14 @@ android {
     // all, which on a database holding unsynced attendance is not a gap worth having.
     sourceSets.getByName("androidTest") {
         assets.srcDirs("$projectDir/schemas")
+        kotlin.srcDirs("$projectDir/src/sharedTest/java")
+    }
+
+    // Test doubles both suites need. One copy, because a fake that drifts between the unit and
+    // instrumented versions is a fake that is lying to one of them — and the lie surfaces as a
+    // test that passes against a stub the production code no longer matches.
+    sourceSets.getByName("test") {
+        kotlin.srcDirs("$projectDir/src/sharedTest/java")
     }
 }
 

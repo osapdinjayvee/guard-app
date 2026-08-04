@@ -112,7 +112,7 @@ class HomeViewModelTest {
     }
     private var evaluationRefreshes = 0
     private val evaluationRepo = object : EvaluationRepository {
-        override suspend fun questions(): List<EvaluationQuestion> = emptyList()
+        override suspend fun questions(type: AttendanceType): List<EvaluationQuestion> = emptyList()
         override suspend fun refresh(): ApiResult<Unit> {
             evaluationRefreshes++
             return ApiResult.Success(Unit)

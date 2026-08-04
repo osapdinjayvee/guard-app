@@ -112,5 +112,29 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
-val GUARD_MIGRATIONS =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+/**
+ * Which end of a shift each evaluation question belongs to.
+ *
+ * Defaults to TIME_OUT, because that is where every cached question was asked before the column
+ * existed. Any other default would move the office's existing questions to the start of the shift
+ * on upgrade — silently, on the phone only, until the next refresh corrected it.
+ *
+ * The default is not merely for the backfill: it is what a row inserted by a *previous* build would
+ * carry if one ever ran against this schema, and NOT NULL without it would fail the insert.
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE evaluation_questions ADD COLUMN timing TEXT NOT NULL DEFAULT 'TIME_OUT'"
+        )
+    }
+}
+
+val GUARD_MIGRATIONS = arrayOf(
+    MIGRATION_1_2,
+    MIGRATION_2_3,
+    MIGRATION_3_4,
+    MIGRATION_4_5,
+    MIGRATION_5_6,
+    MIGRATION_6_7,
+)

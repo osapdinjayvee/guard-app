@@ -7,7 +7,9 @@ import com.minsu.guardapp.core.network.ApiErrorMapper
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
 import com.minsu.guardapp.core.network.map
+import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.EvaluationQuestion
+import com.minsu.guardapp.domain.model.EvaluationTiming
 import com.minsu.guardapp.domain.repository.EvaluationRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,8 +22,21 @@ class DefaultEvaluationRepository @Inject constructor(
     private val clock: Clock,
 ) : EvaluationRepository {
 
-    override suspend fun questions(): List<EvaluationQuestion> =
-        dao.all().map { EvaluationQuestion(it.id, it.question, it.sortOrder) }
+    override suspend fun questions(type: AttendanceType): List<EvaluationQuestion> =
+        dao.all()
+            .map {
+                EvaluationQuestion(
+                    id = it.id,
+                    question = it.question,
+                    sortOrder = it.sortOrder,
+                    timing = runCatching { EvaluationTiming.valueOf(it.timing) }
+                        // A row written by a build that knew a timing this one does not. Asking it
+                        // at the end of the shift is where every question lived before timings
+                        // existed, and is the safer of the two places to guess.
+                        .getOrDefault(EvaluationTiming.TIME_OUT),
+                )
+            }
+            .filter { it.timing.appliesTo(type) }
 
     /**
      * Replaced wholesale, not merged.
@@ -45,6 +60,7 @@ class DefaultEvaluationRepository @Inject constructor(
                             EvaluationQuestionEntity(
                                 id = it.id,
                                 question = it.question,
+                                timing = EvaluationTiming.fromWire(it.type).name,
                                 sortOrder = it.sortOrder,
                                 updatedAt = now,
                             )

@@ -143,11 +143,46 @@ data class DutyAssignment(
         }
 }
 
-/** One yes/no question put to a guard at the end of their shift. */
+/**
+ * Which end of a shift a question belongs to.
+ *
+ * The office decides, per question, in the admin. [BOTH] is asked twice — once opening the shift
+ * and once closing it — which is the point of it: "are all issued items accounted for" is a
+ * different answer at 6am and at 6pm, and the pair is the evidence.
+ */
+enum class EvaluationTiming {
+    TIME_IN,
+    TIME_OUT,
+    BOTH,
+    ;
+
+    fun appliesTo(type: AttendanceType): Boolean = when (type) {
+        AttendanceType.TIME_IN -> this == TIME_IN || this == BOTH
+        AttendanceType.TIME_OUT -> this == TIME_OUT || this == BOTH
+        // A visit happens mid-round. It is not a boundary and describes no shift.
+        AttendanceType.CHECKPOINT -> false
+    }
+
+    companion object {
+        /**
+         * Unknown values fall back to [TIME_OUT], which is where every question lived before the
+         * timing existed. A server that adds a third timing must not make an old build ask a
+         * question at the wrong end of the shift, or ask nothing at all.
+         */
+        fun fromWire(value: String?): EvaluationTiming = when (value?.lowercase()) {
+            "time_in" -> TIME_IN
+            "both" -> BOTH
+            else -> TIME_OUT
+        }
+    }
+}
+
+/** One yes/no question put to a guard at one end of their shift. */
 data class EvaluationQuestion(
     val id: Long,
     val question: String,
     val sortOrder: Int,
+    val timing: EvaluationTiming = EvaluationTiming.TIME_OUT,
 )
 
 /** The guard's answer to one of them, carried with the Time Out it describes. */

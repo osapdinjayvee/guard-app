@@ -123,6 +123,7 @@ fun GuardApp(
                     onUpdate = updateViewModel::startUpdate,
                     onRetry = updateViewModel::retryDownload,
                     onDismiss = updateViewModel::dismiss,
+                    onSelect = updateViewModel::select,
                 )
             }
         }

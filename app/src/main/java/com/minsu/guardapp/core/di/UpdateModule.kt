@@ -27,6 +27,11 @@ annotation class UpdateClient
 @Retention(AnnotationRetention.BINARY)
 annotation class UpdateManifestUrl
 
+/** The office's published build list. Preferred; the manifest above is the fallback. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class UpdateVersionsUrl
+
 /** The running build's versionCode, injected so tests can pretend to be an older one. */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
@@ -66,6 +71,10 @@ object UpdateNetworkModule {
     @Provides
     @UpdateManifestUrl
     fun updateManifestUrl(): String = BuildConfig.UPDATE_MANIFEST_URL
+
+    @Provides
+    @UpdateVersionsUrl
+    fun updateVersionsUrl(): String = BuildConfig.UPDATE_VERSIONS_URL
 
     @Provides
     @InstalledVersionCode

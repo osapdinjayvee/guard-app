@@ -2,13 +2,16 @@ package com.minsu.guardapp.feature.update
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,14 +21,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.minsu.guardapp.BuildConfig
+import com.minsu.guardapp.core.update.AppUpdate
 import com.minsu.guardapp.core.update.DownloadState
 import com.minsu.guardapp.ui.components.GuardCard
 
@@ -83,6 +89,7 @@ fun UpdateSheet(
     onUpdate: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
+    onSelect: (AppUpdate) -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -105,15 +112,81 @@ fun UpdateSheet(
 
             GuardCard { UpdateDetails(state) }
 
+            VersionPicker(state, onSelect = onSelect)
+
             Spacer(Modifier.height(16.dp))
             UpdateActions(state, onUpdate = onUpdate, onRetry = onRetry, onLater = onDismiss)
         }
     }
 }
 
+/**
+ * The other builds on offer, when there is more than one.
+ *
+ * Hidden for a single release, which is the ordinary case: a list of one is a decision nobody was
+ * asked to make. Every entry here is *newer* than what is installed — Android refuses a build
+ * whose code is below the installed one, so an older release would be a row that cannot be acted
+ * on, and taking it would mean uninstalling, which destroys unsynced attendance.
+ */
+@Composable
+private fun VersionPicker(state: UpdateUiState, onSelect: (AppUpdate) -> Unit) {
+    if (state.versions.size < 2) return
+
+    Spacer(Modifier.height(12.dp))
+    Text(
+        "Choose a version",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
+    Spacer(Modifier.height(6.dp))
+
+    state.versions.forEach { version ->
+        val isSelected = state.selected?.versionCode == version.versionCode
+
+        GuardCard(
+            modifier = Modifier
+                .padding(vertical = 4.dp)
+                // Locked while a download is running: switching mid-transfer would throw away
+                // bytes the guard has already paid for on a campus connection.
+                .clickable(enabled = !state.isBusy) { onSelect(version) },
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
+                    selected = isSelected,
+                    onClick = { onSelect(version) },
+                    enabled = !state.isBusy,
+                )
+                Spacer(Modifier.width(4.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Version ${version.versionName}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        version.sizeBytes?.asMegabytes() ?: "Size unknown",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (version.versionCode == state.versions.first().versionCode) {
+                    Text(
+                        "Latest",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun UpdateDetails(state: UpdateUiState) {
-    val update = state.available
+    val update = state.selected ?: state.available
 
     Text(
         "Version ${update?.versionName ?: "—"}",

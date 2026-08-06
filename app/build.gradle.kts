@@ -28,6 +28,17 @@ val appVersion = Properties().apply {
  */
 val UPDATE_MANIFEST_URL = "https://minsu.edu.ph/app/guard-version.json"
 
+/**
+ * The office's list of published builds.
+ *
+ * Preferred over the static manifest above, which describes exactly one version and cannot say
+ * what else exists. The manifest stays as the fallback and is not going away: it is the only thing
+ * builds already in the field know how to read, and if this endpoint is unreachable — not deployed
+ * yet, a server being restarted — an update check that gave up there would leave a guard with no
+ * way to hear about the release that fixes whatever they are stuck on.
+ */
+val UPDATE_VERSIONS_URL = "https://guard.minsu.edu.ph/api/app/versions"
+
 /** How many changelog bullets reach the update sheet before the rest become a count. */
 val MAX_RELEASE_NOTE_LINES = 8
 
@@ -102,6 +113,7 @@ android {
             // fake data even by accident.
             buildConfigField("boolean", "USE_MOCK_API", "false")
             buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$UPDATE_MANIFEST_URL\"")
+            buildConfigField("String", "UPDATE_VERSIONS_URL", "\"$UPDATE_VERSIONS_URL\"")
         }
         release {
             // R8: shrink, optimise, obfuscate. See proguard-rules.pro — several of this app's own
@@ -116,6 +128,7 @@ android {
             )
             buildConfigField("String", "API_BASE_URL", "\"https://guard.minsu.edu.ph/api/\"")
             buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$UPDATE_MANIFEST_URL\"")
+            buildConfigField("String", "UPDATE_VERSIONS_URL", "\"$UPDATE_VERSIONS_URL\"")
 
             signingConfig = signingConfigs.findByName("release")
         }

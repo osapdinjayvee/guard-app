@@ -23,6 +23,15 @@ sealed interface CheckOutcome {
 interface UpdateRepository {
     val status: StateFlow<UpdateStatus>
 
+    /**
+     * Every published build this handset could actually install, newest first.
+     *
+     * Only ones newer than the installed build. Android refuses an APK whose versionCode is below
+     * the installed one, so offering an older release would be offering a button that cannot work
+     * — and the only way to take it would be to uninstall, which destroys unsynced attendance.
+     */
+    val available: StateFlow<List<AppUpdate>>
+
     /** True while a check is in flight, so the Account row can say "Checking…". */
     val isChecking: StateFlow<Boolean>
 
@@ -50,6 +59,9 @@ class DefaultUpdateRepository @Inject constructor(
     private val checking = MutableStateFlow(false)
     override val isChecking: StateFlow<Boolean> = checking.asStateFlow()
 
+    private val installable = MutableStateFlow<List<AppUpdate>>(emptyList())
+    override val available: StateFlow<List<AppUpdate>> = installable.asStateFlow()
+
     // Two screens can ask at once — the gate on launch and the Account row under a guard's
     // thumb. Serialised so they cannot both fetch, and so the second sees the first's answer.
     private val lock = Mutex()
@@ -72,19 +84,34 @@ class DefaultUpdateRepository @Inject constructor(
             checking.value = false
         }
 
-        val manifest = result.getOrElse {
+        val published = result.getOrElse {
             // Deliberately leaves `state` untouched. A failed check knows nothing — it does not
             // know the app is up to date, and saying so would be a lie a guard might act on.
             return@withLock CheckOutcome.Unreachable
         }
 
         preferences.markChecked(now)
+
+        // Only what this handset could actually take. Android refuses a build whose code is below
+        // the installed one, so anything older is a row that cannot be acted on.
+        installable.value = published
+            .filter { it.versionCode > installedVersionCode }
+            .map { it.toAppUpdate() }
+
+        // The newest is what the prompt offers, and the floor is read from it: a release that
+        // raises the minimum does so as of itself, and an older entry still carrying the old floor
+        // must not undo that.
+        val newest = published.maxByOrNull { it.versionCode }
+            ?: return@withLock CheckOutcome.Finished(UpdateStatus.UpToDate).also {
+                state.value = UpdateStatus.UpToDate
+            }
+
         // A guard who taps "Check for updates" is owed the truth, even about a version they
         // declined earlier. Reporting "you're on the latest version" because of a past dismissal
         // would be a lie told in answer to a direct question — and it would leave them no way
         // back to an update they have changed their mind about.
         val dismissed = if (force) 0 else preferences.dismissedVersionCode.first()
-        val resolved = resolve(manifest, dismissed)
+        val resolved = resolve(newest, dismissed)
         state.value = resolved
         CheckOutcome.Finished(resolved)
     }

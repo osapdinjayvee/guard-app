@@ -24,6 +24,10 @@ data class UpdateUiState(
     val status: UpdateStatus = UpdateStatus.Unknown,
     val download: DownloadState = DownloadState.Idle,
     val isChecking: Boolean = false,
+    /** Every build this handset could install, newest first. Empty when only one is on offer. */
+    val versions: List<AppUpdate> = emptyList(),
+    /** The one the button will install. Defaults to the newest; the guard may choose another. */
+    val selected: AppUpdate? = null,
     /**
      * The APK is downloaded, but Android has not been told this app may install packages. The
      * guard has to grant that on a system screen — there is no way to do it from here.
@@ -54,19 +58,48 @@ class UpdateViewModel @Inject constructor(
     /** One-shot text for the Account screen's snackbar. The gate does not use it. */
     val snackbar: StateFlow<String?> = message
 
+    /**
+     * Which build the guard picked, or null for "whatever is newest".
+     *
+     * Held as a version code rather than the object, so a refreshed list does not leave a stale
+     * copy of a release selected — the choice survives, the data behind it is always current.
+     */
+    private val chosen = MutableStateFlow<Int?>(null)
+
     val uiState: StateFlow<UpdateUiState> = combine(
         repository.status,
         downloader.progress,
         repository.isChecking,
         permissionNeeded,
-    ) { status, download, checking, needsPermission ->
+        combine(repository.available, chosen) { versions, code -> versions to code },
+    ) { status, download, checking, needsPermission, (versions, code) ->
+        val newest = when (val s = status) {
+            is UpdateStatus.Available -> s.update
+            is UpdateStatus.Required -> s.update
+            else -> null
+        }
+
         UpdateUiState(
             status = status,
             download = download,
             isChecking = checking,
+            versions = versions,
+            // A chosen code that is no longer on offer falls back to the newest rather than to
+            // nothing: the office withdrawing a release must not leave the button inert.
+            selected = versions.firstOrNull { it.versionCode == code } ?: newest,
             needsInstallPermission = needsPermission,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpdateUiState())
+
+    /** Choose a build other than the newest. */
+    fun select(update: AppUpdate) {
+        if (uiState.value.selected?.versionCode == update.versionCode) return
+
+        // A half-finished download of the version being replaced is worth nothing and would be
+        // mistaken for this one's the moment Install was tapped.
+        downloader.cancel()
+        chosen.value = update.versionCode
+    }
 
     /** The quiet path, run on launch. Says nothing when it fails. */
     fun checkQuietly() = viewModelScope.launch {
@@ -96,11 +129,16 @@ class UpdateViewModel @Inject constructor(
      * how long the download takes is worse than asking once the file is ready.
      */
     fun startUpdate() {
-        val update = uiState.value.available ?: return
+        // The chosen build, not simply the newest — the guard may have picked another from the
+        // list. Falls back to the newest when nothing was chosen, which is the common case.
+        val update = uiState.value.selected ?: uiState.value.available ?: return
         permissionNeeded.value = false
 
         when (val current = downloader.progress.value) {
-            is DownloadState.Ready -> installOrRequestPermission(current)
+            // Only if it is the build being asked for. A Ready file from a previously selected
+            // version would otherwise install the wrong release, silently and successfully.
+            is DownloadState.Ready if current.versionCode == update.versionCode ->
+                installOrRequestPermission(current)
             is DownloadState.Downloading -> Unit
             else -> {
                 // start() publishes Downloading before it returns, so the wait below cannot be

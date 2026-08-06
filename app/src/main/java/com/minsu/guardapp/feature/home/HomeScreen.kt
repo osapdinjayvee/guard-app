@@ -74,55 +74,9 @@ fun HomeRoute(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val openUrl by viewModel.openUrl.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val snackbars = remember { SnackbarHostState() }
-
-    /*
-     * The handbook opens in whatever the handset reads PDFs with, rather than in a viewer this app
-     * would have to carry. A guard's phone already does this well, and a twenty-megabyte document
-     * most of them open twice is not worth the build — or the download.
-     */
-    LaunchedEffect(openUrl) {
-        openUrl?.let { url ->
-            val opened = runCatching {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, url.toUri())
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            }.isSuccess
-
-            // No browser and no PDF reader. Rare, but silence here would look like a dead tile.
-            if (!opened) snackbars.showSnackbar("No app on this phone can open a PDF.")
-            viewModel.urlOpened()
-        }
-    }
-
-    LaunchedEffect(message) {
-        message?.let {
-            snackbars.showSnackbar(it)
-            viewModel.messageShown()
-        }
-    }
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbars) },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { padding ->
-        // Passed as a slot rather than called inside HomeScreen so the stateless screen — and its
-        // @Preview — stay free of the map's hilt-injected ViewModel.
-        HomeScreen(
-            state,
-            onAction = { action ->
-                // Handled here rather than by the scaffold: it needs the ViewModel, and the
-                // scaffold only knows how to navigate.
-                if (action == HomeAction.Handbook) viewModel.openHandbook() else onAction(action)
-            },
-            modifier = Modifier.padding(padding),
-            locationSection = { HomeLocationMapSection() },
-        )
-    }
+    // Passed as a slot rather than called inside HomeScreen so the stateless screen — and its
+    // @Preview — stay free of the map's hilt-injected ViewModel.
+    HomeScreen(state, onAction = onAction, locationSection = { HomeLocationMapSection() })
 }
 
 @Composable

@@ -15,7 +15,6 @@ import com.minsu.guardapp.domain.model.SyncState
 import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
-import com.minsu.guardapp.domain.repository.DocumentRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.repository.ProfileRepository
@@ -120,10 +119,6 @@ class HomeViewModelTest {
             return ApiResult.Success(Unit)
         }
     }
-    /** Nothing here opens the handbook, so the office has published none. */
-    private val documentRepo = object : DocumentRepository {
-        override suspend fun url(identifier: String): String? = null
-    }
     private val monitor = object : NetworkMonitor {
         override val isOnline: Flow<Boolean> = online
     }
@@ -135,7 +130,7 @@ class HomeViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel() =
-        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, documentRepo, monitor)
+        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, monitor)
 
     @Test
     fun `streams local state without waiting on the network`() = runTest {
@@ -209,7 +204,7 @@ class HomeViewModelTest {
             override suspend fun clear() = Unit
         }
 
-        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, documentRepo, monitor)
+        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, monitor)
 
         assertEquals("Juan Dela Cruz", vm.uiState.value.profile?.name)
         assertFalse(vm.uiState.value.isRefreshing)

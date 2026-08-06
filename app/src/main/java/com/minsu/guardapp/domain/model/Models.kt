@@ -132,6 +132,16 @@ data class DutyAssignment(
     val totalHours: Float,
 ) {
     /** The types this guard may record today. A stationed guard never sees a patrol visit. */
+    /**
+     * Unique within a roster, unlike the date.
+     *
+     * A day can hold more than one shift, so keying a list on the date alone is a duplicate key —
+     * which `LazyColumn` does not tolerate: it throws, and the Schedule screen dies on open. The
+     * date used to be safe because the roster cache could physically hold only one entry per day.
+     * That was the bug, and this is the other end of fixing it.
+     */
+    val rowKey: String get() = "$date#${startsAt.orEmpty()}#${endsAt.orEmpty()}"
+
     val allowedTypes: List<AttendanceType>
         get() = when (dutyType) {
             DutyType.STATIONED -> listOf(AttendanceType.TIME_IN, AttendanceType.TIME_OUT)

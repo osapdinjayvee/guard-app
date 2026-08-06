@@ -45,6 +45,7 @@ import com.minsu.guardapp.feature.reference.CheckpointsScreen
 import com.minsu.guardapp.feature.reference.DutiesScreen
 import com.minsu.guardapp.feature.reference.RoundScreen
 import com.minsu.guardapp.feature.reference.ScheduleScreen
+import com.minsu.guardapp.feature.handbook.HandbookScreen
 import com.minsu.guardapp.feature.reports.ReportsScreen
 import com.minsu.guardapp.feature.scan.ScanQrScreen
 
@@ -117,10 +118,7 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             HomeAction.Duties -> navController.navigate(ROUTE_DUTIES)
                             HomeAction.Announcements -> navController.navigate(ROUTE_ANNOUNCEMENTS)
 
-                            // Handled inside HomeRoute, which has the ViewModel that resolves the
-                            // document's address and hands it to the system. Nothing to navigate
-                            // to: the handbook opens in the phone's own PDF reader.
-                            HomeAction.Handbook -> Unit
+                            HomeAction.Handbook -> navController.navigate(ROUTE_HANDBOOK)
                         }
                     },
                 )
@@ -141,6 +139,7 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             composable(ROUTE_CHECKPOINTS) { CheckpointsScreen(onBack = navController::popBackStack) }
             composable(ROUTE_DUTIES) { DutiesScreen(onBack = navController::popBackStack) }
             composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen(onBack = navController::popBackStack) }
+            composable(ROUTE_HANDBOOK) { HandbookScreen(onBack = navController::popBackStack) }
         }
     }
 }
@@ -230,3 +229,4 @@ private const val ROUTE_ROUND = "schedule/round"
 private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
 private const val ROUTE_DUTIES = "reference/duties"
 private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"
+private const val ROUTE_HANDBOOK = "reference/handbook"

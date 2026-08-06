@@ -151,7 +151,10 @@ fun HistoryDetailScreen(recordId: String, onBack: () -> Unit) {
             .padding(horizontal = 20.dp)
             .padding(bottom = 24.dp),
     ) {
-        ScreenTitle("Attendance")
+        // The arrow was missing while `onBack` sat unused in the signature, so the only way out of
+        // a record was the system gesture — which on a cased phone in the dark is a guess. The
+        // screen sits on top of History and Reports; ScreenTitle's own contract says to pass it.
+        ScreenTitle("Attendance", onBack = onBack)
 
         val current = record ?: return@Column
 

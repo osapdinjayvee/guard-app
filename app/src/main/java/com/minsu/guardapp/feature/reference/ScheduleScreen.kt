@@ -140,7 +140,7 @@ fun ScheduleScreen(
                     )
                 }
 
-                items(state.upcoming, key = { it.date }) { day ->
+                items(state.upcoming, key = { it.rowKey }) { day ->
                     DayRow(
                         day = day,
                         isToday = day.date == state.today,
@@ -152,13 +152,14 @@ fun ScheduleScreen(
                 // Thursday — but kept below, because it is not what they came here to see.
                 if (state.past.isNotEmpty()) {
                     item { GroupLabel("Earlier") }
-                    items(state.past, key = { it.date }) { day ->
+                    items(state.past, key = { it.rowKey }) { day ->
                         DayRow(
                             day = day,
                             isToday = false,
                             onOpenRound = { onOpenRound(day.date) },
                         )
                     }
+
                 }
             }
         }

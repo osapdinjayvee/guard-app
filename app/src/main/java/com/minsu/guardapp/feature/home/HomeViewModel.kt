@@ -10,6 +10,7 @@ import com.minsu.guardapp.domain.model.GuardProfile
 import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
+import com.minsu.guardapp.domain.repository.DocumentRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.EvaluationRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
@@ -48,11 +49,45 @@ class HomeViewModel @Inject constructor(
     private val duties: DutyRepository,
     private val schedule: ScheduleRepository,
     private val evaluations: EvaluationRepository,
+    private val documents: DocumentRepository,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    /** A URL the screen should hand to the system, once. Cleared as soon as it has been opened. */
+    private val _openUrl = MutableStateFlow<String?>(null)
+    val openUrl: StateFlow<String?> = _openUrl.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    /**
+     * Fetches the handbook's address and asks the screen to open it.
+     *
+     * The address is looked up rather than built, because the office replaces the file and the URL
+     * changes with it. Hardcoding one here would work until the day somebody uploads a new
+     * handbook, and then quietly serve the old one for as long as the storage kept it.
+     */
+    fun openHandbook() = viewModelScope.launch {
+        val url = documents.url(DocumentRepository.GUARD_HANDBOOK)
+
+        if (url == null) {
+            _message.value = if (_uiState.value.isOnline) {
+                "The handbook could not be found. The office may not have published it yet."
+            } else {
+                "You're offline. Connect to the internet to open the handbook."
+            }
+            return@launch
+        }
+
+        _openUrl.value = url
+    }
+
+    fun urlOpened() = _openUrl.update { null }
+
+    fun messageShown() = _message.update { null }
 
     init {
         // Local state streams straight off Room and DataStore, never waiting on the network.

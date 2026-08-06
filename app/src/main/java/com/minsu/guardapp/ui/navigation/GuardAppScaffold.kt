@@ -116,6 +116,11 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             HomeAction.Checkpoints -> navController.navigate(ROUTE_CHECKPOINTS)
                             HomeAction.Duties -> navController.navigate(ROUTE_DUTIES)
                             HomeAction.Announcements -> navController.navigate(ROUTE_ANNOUNCEMENTS)
+
+                            // Handled inside HomeRoute, which has the ViewModel that resolves the
+                            // document's address and hands it to the system. Nothing to navigate
+                            // to: the handbook opens in the phone's own PDF reader.
+                            HomeAction.Handbook -> Unit
                         }
                     },
                 )

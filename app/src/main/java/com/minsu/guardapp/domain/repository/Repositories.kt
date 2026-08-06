@@ -202,6 +202,23 @@ interface ScheduleRepository {
 }
 
 /**
+ * PDFs the office publishes — the guard handbook, and whatever follows it.
+ *
+ * Only the address is dealt with here. The file is opened by whatever the handset uses for PDFs,
+ * because a guard's phone already reads them and this app carrying its own viewer would be a lot
+ * of build for a document most guards open twice.
+ */
+interface DocumentRepository {
+    /** The published URL of [identifier], or null if there is none or it could not be reached. */
+    suspend fun url(identifier: String): String?
+
+    companion object {
+        /** The one the Home tile opens. Slugged from the document's title, server-side. */
+        const val GUARD_HANDBOOK = "sg_handbook"
+    }
+}
+
+/**
  * The self-evaluation questions, for both ends of a shift.
  *
  * Cached, because a guard closing a shift at a perimeter post has no more signal than one opening

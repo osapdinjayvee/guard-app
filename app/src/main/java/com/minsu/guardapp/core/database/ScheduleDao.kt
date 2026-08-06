@@ -11,14 +11,20 @@ interface ScheduleDao {
     @Upsert
     suspend fun upsertAll(entries: List<ScheduleEntity>)
 
-    /** The duty for one day. Null on a rest day, or a week the office has not filled in. */
-    @Query("SELECT * FROM schedule WHERE date = :date LIMIT 1")
-    fun observeForDate(date: String): Flow<ScheduleEntity?>
+    /**
+     * Every shift on one day, earliest first. Empty on a rest day, or a week the office has not
+     * filled in.
+     *
+     * A list, not a row. These returned `LIMIT 1` and the caller took it as "the" duty, which threw
+     * away the second shift of a split day and gave whichever the database listed first.
+     */
+    @Query("SELECT * FROM schedule WHERE date = :date ORDER BY startsAt, id")
+    fun observeForDate(date: String): Flow<List<ScheduleEntity>>
 
-    @Query("SELECT * FROM schedule WHERE date = :date LIMIT 1")
-    suspend fun forDate(date: String): ScheduleEntity?
+    @Query("SELECT * FROM schedule WHERE date = :date ORDER BY startsAt, id")
+    suspend fun forDate(date: String): List<ScheduleEntity>
 
-    @Query("SELECT * FROM schedule ORDER BY date")
+    @Query("SELECT * FROM schedule ORDER BY date, startsAt, id")
     fun observeAll(): Flow<List<ScheduleEntity>>
 
     /**

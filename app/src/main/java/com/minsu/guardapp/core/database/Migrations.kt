@@ -130,6 +130,41 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+/**
+ * The roster stops being one-shift-per-day.
+ *
+ * `schedule` was keyed on the date, so a guard holding two shifts against one date kept only
+ * whichever arrived last — the other was overwritten on the way in, and no amount of refreshing
+ * could bring it back. The table gains a surrogate key so both can sit there.
+ *
+ * Dropped and recreated rather than migrated in place. This table is a cache of the server's
+ * roster, cleared and rewritten on every refresh; there is nothing in it worth carrying across, and
+ * the alternative — renaming, copying, and inventing ids for rows that are about to be replaced —
+ * would be more code and more risk for data with a lifetime measured in minutes.
+ *
+ * Emphatically not a pattern for `attendance`, whose rows exist nowhere else.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS `schedule`")
+        // Copied from the exported schema, not written by hand. Room compares the table it finds
+        // against the one it generated, character for character in effect: `PRIMARY KEY(id)` where
+        // it expects `INTEGER PRIMARY KEY AUTOINCREMENT` is a mismatch it refuses to open the
+        // database over — a crash on first launch, on a device, holding unsynced attendance.
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `schedule` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`date` TEXT NOT NULL, " +
+                "`dutyType` TEXT NOT NULL, " +
+                "`dutyName` TEXT, " +
+                "`startsAt` TEXT, " +
+                "`endsAt` TEXT, " +
+                "`totalHours` REAL NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL)"
+        )
+    }
+}
+
 val GUARD_MIGRATIONS = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -137,4 +172,5 @@ val GUARD_MIGRATIONS = arrayOf(
     MIGRATION_4_5,
     MIGRATION_5_6,
     MIGRATION_6_7,
+    MIGRATION_7_8,
 )

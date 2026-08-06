@@ -4,6 +4,7 @@ import com.minsu.guardapp.core.network.GuardApi
 import com.minsu.guardapp.core.network.dto.AnnouncementDto
 import com.minsu.guardapp.core.network.dto.AttendanceDto
 import com.minsu.guardapp.core.network.dto.CheckpointDto
+import com.minsu.guardapp.core.network.dto.DocumentDto
 import com.minsu.guardapp.core.network.dto.DutyDto
 import com.minsu.guardapp.core.network.dto.Envelope
 import com.minsu.guardapp.core.network.dto.EvaluationQuestionDto
@@ -37,6 +38,8 @@ open class FakeGuardApi : GuardApi {
     override suspend fun settings(): Envelope<MobileSettingsDto> = error("settings not stubbed")
     override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> =
         error("history not stubbed")
+    override suspend fun document(identifier: String): Envelope<DocumentDto> =
+        error("document not stubbed")
     override suspend fun submitAttendance(
         clientUuid: okhttp3.RequestBody,
         checkpointId: okhttp3.RequestBody,

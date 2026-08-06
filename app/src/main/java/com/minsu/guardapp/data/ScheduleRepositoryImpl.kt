@@ -35,9 +35,10 @@ class DefaultScheduleRepository @Inject constructor(
 ) : ScheduleRepository {
 
     override fun observeToday(): Flow<DutyAssignment?> =
-        dao.observeForDate(todayDate()).map { it?.toDomain() }
+        dao.observeForDate(todayDate()).map { rows -> rows.currentOrNext(clock.nowMillis()) }
 
-    override suspend fun today(): DutyAssignment? = dao.forDate(todayDate())?.toDomain()
+    override suspend fun today(): DutyAssignment? =
+        dao.forDate(todayDate()).currentOrNext(clock.nowMillis())
 
     override fun observeAll(): Flow<List<DutyAssignment>> =
         dao.observeAll().map { rows -> rows.mapNotNull { it.toDomain() } }
@@ -123,7 +124,7 @@ class DefaultScheduleRepository @Inject constructor(
     }
 }
 
-private fun ScheduleEntity.toDomain(): DutyAssignment? {
+internal fun ScheduleEntity.toDomain(): DutyAssignment? {
     val type = DutyType.fromCode(dutyType) ?: return null
     return DutyAssignment(
         date = date,

@@ -114,9 +114,9 @@ class MigrationTest {
         }
 
         // The *current* version, not a number that was current once. Left behind at 5 while the
-        // schema moved on, this test would keep passing while validating nothing about the last
-        // two migrations.
-        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, *GUARD_MIGRATIONS)
+        // schema moved on, this test would keep passing while validating nothing about the later
+        // migrations — including whether the tables they create match what Room expects to find.
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, *GUARD_MIGRATIONS)
 
         db.query("SELECT id, syncStatus FROM attendance").use { c ->
             assertTrue("the unsynced attendance survived every migration", c.moveToFirst())
@@ -177,6 +177,46 @@ class MigrationTest {
             assertTrue("the cached question survived", c.moveToFirst())
             assertEquals("Was the logbook handed over properly?", c.getString(0))
             assertEquals("TIME_OUT", c.getString(1))
+        }
+    }
+
+    /**
+     * The roster stops being one-shift-per-day.
+     *
+     * `schedule` was keyed on the date, so a guard holding a cancelled morning and the afternoon
+     * that replaced it kept only whichever arrived last. The table is dropped and recreated with a
+     * surrogate key — safe here and nowhere else, because this table is a cache of the server's
+     * roster and is cleared and rewritten on every refresh.
+     *
+     * The assertion that matters is the one `runMigrationsAndValidate` makes for free: that the
+     * table this migration builds is the one Room expects to find. Hand-written DDL that differs
+     * by so much as a missing AUTOINCREMENT stops the database opening at all.
+     */
+    @Test
+    fun migrating_7_to_8_rebuilds_the_roster_so_a_day_can_hold_two_shifts() {
+        helper.createDatabase(TEST_DB, 7).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO schedule (date, dutyType, dutyName, startsAt, endsAt, totalHours, updatedAt)
+                VALUES ('2026-08-06', 'SG', 'Stationed Guard', '06:00:00', '14:00:00', 8.0, 1783663331000)
+                """.trimIndent()
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, *GUARD_MIGRATIONS)
+
+        // Both shifts fit now. Under the old key the second would have replaced the first.
+        db.execSQL(
+            """
+            INSERT INTO schedule (date, dutyType, dutyName, startsAt, endsAt, totalHours, updatedAt)
+            VALUES ('2026-08-06', 'SG', 'Stationed Guard', '06:00:00', '14:00:00', 8.0, 1783663331000),
+                   ('2026-08-06', 'SG', 'Stationed Guard', '15:00:00', '23:00:00', 8.0, 1783663331000)
+            """.trimIndent()
+        )
+
+        db.query("SELECT COUNT(*) FROM schedule WHERE date = '2026-08-06'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("a split day keeps both shifts", 2, c.getInt(0))
         }
     }
 

@@ -4,6 +4,7 @@ import com.minsu.guardapp.core.network.GuardApi
 import com.minsu.guardapp.core.network.dto.AnnouncementDto
 import com.minsu.guardapp.core.network.dto.AttendanceDto
 import com.minsu.guardapp.core.network.dto.CheckpointDto
+import com.minsu.guardapp.core.network.dto.DocumentDto
 import com.minsu.guardapp.core.network.dto.DutyDto
 import com.minsu.guardapp.core.network.dto.Envelope
 import com.minsu.guardapp.core.network.dto.EvaluationQuestionDto
@@ -63,6 +64,9 @@ open class FakeGuardApi : GuardApi {
 
     override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> =
         notStubbed("history")
+
+    override suspend fun document(identifier: String): Envelope<DocumentDto> =
+        notStubbed("document")
 
     private fun notStubbed(endpoint: String): Nothing =
         throw NotImplementedError("$endpoint was called but this test did not stub it")

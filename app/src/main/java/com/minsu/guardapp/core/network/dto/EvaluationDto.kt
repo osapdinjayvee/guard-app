@@ -3,6 +3,20 @@ package com.minsu.guardapp.core.network.dto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
+/**
+ * A published PDF, as served by `GET /api/documents/{identifier}`.
+ *
+ * The endpoint answers with the fields both nested under `data` and repeated at the top level.
+ * Only the envelope is read here — [com.minsu.guardapp.core.network.dto.Envelope] handles it, and
+ * a second copy of the same three fields is not worth a second shape to parse it with.
+ */
+@JsonClass(generateAdapter = true)
+data class DocumentDto(
+    @Json(name = "type") val type: String? = null,
+    @Json(name = "url") val url: String,
+    @Json(name = "filename") val filename: String? = null,
+)
+
 /** One yes/no question of the self-evaluation, as served by `GET /api/evaluation-questions`. */
 @JsonClass(generateAdapter = true)
 data class EvaluationQuestionDto(

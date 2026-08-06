@@ -1,5 +1,6 @@
 package com.minsu.guardapp.feature.home
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,18 +22,25 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minsu.guardapp.R
@@ -58,7 +66,7 @@ import java.util.Date
 import java.util.Locale
 
 /** Where Home's tiles lead. The scaffold owns the navigator; Home only says where it wants to go. */
-enum class HomeAction { Scan, History, Reports, Schedule, Checkpoints, Duties, Announcements, Account }
+enum class HomeAction { Scan, History, Reports, Schedule, Checkpoints, Duties, Announcements, Handbook, Account }
 
 @Composable
 fun HomeRoute(
@@ -66,9 +74,55 @@ fun HomeRoute(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    // Passed as a slot rather than called inside HomeScreen so the stateless screen — and its
-    // @Preview — stay free of the map's hilt-injected ViewModel.
-    HomeScreen(state, onAction = onAction, locationSection = { HomeLocationMapSection() })
+    val openUrl by viewModel.openUrl.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val snackbars = remember { SnackbarHostState() }
+
+    /*
+     * The handbook opens in whatever the handset reads PDFs with, rather than in a viewer this app
+     * would have to carry. A guard's phone already does this well, and a twenty-megabyte document
+     * most of them open twice is not worth the build — or the download.
+     */
+    LaunchedEffect(openUrl) {
+        openUrl?.let { url ->
+            val opened = runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, url.toUri())
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }.isSuccess
+
+            // No browser and no PDF reader. Rare, but silence here would look like a dead tile.
+            if (!opened) snackbars.showSnackbar("No app on this phone can open a PDF.")
+            viewModel.urlOpened()
+        }
+    }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbars.showSnackbar(it)
+            viewModel.messageShown()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbars) },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { padding ->
+        // Passed as a slot rather than called inside HomeScreen so the stateless screen — and its
+        // @Preview — stay free of the map's hilt-injected ViewModel.
+        HomeScreen(
+            state,
+            onAction = { action ->
+                // Handled here rather than by the scaffold: it needs the ViewModel, and the
+                // scaffold only knows how to navigate.
+                if (action == HomeAction.Handbook) viewModel.openHandbook() else onAction(action)
+            },
+            modifier = Modifier.padding(padding),
+            locationSection = { HomeLocationMapSection() },
+        )
+    }
 }
 
 @Composable
@@ -312,6 +366,7 @@ private fun QuickActions(onAction: (HomeAction) -> Unit) {
         Action(R.drawable.ic_locator, "Checkpoints", HomeAction.Checkpoints),
         Action(R.drawable.ic_document, "Duties", HomeAction.Duties),
         Action(R.drawable.ic_megaphone, "Announcement", HomeAction.Announcements),
+        Action(R.drawable.ic_document, "Handbook", HomeAction.Handbook),
         Action(R.drawable.ic_profile, "Profile", HomeAction.Account),
     )
 

@@ -3,6 +3,7 @@ package com.minsu.guardapp.core.network
 import com.minsu.guardapp.core.network.dto.AnnouncementDto
 import com.minsu.guardapp.core.network.dto.AttendanceDto
 import com.minsu.guardapp.core.network.dto.CheckpointDto
+import com.minsu.guardapp.core.network.dto.DocumentDto
 import com.minsu.guardapp.core.network.dto.DutyDto
 import com.minsu.guardapp.core.network.dto.Envelope
 import com.minsu.guardapp.core.network.dto.EvaluationQuestionDto
@@ -109,4 +110,15 @@ interface GuardApi {
         @Query("page") page: Int = 1,
         @Query("per_page") perPage: Int = 25,
     ): PagedEnvelope<AttendanceDto>
+
+    /**
+     * A published PDF by name — the guard handbook, and whatever the office publishes next.
+     *
+     * Only the URL comes back; the file itself is opened by whatever the handset uses for PDFs.
+     * Downloading a twenty-megabyte handbook into the app, to show it in a viewer this app does
+     * not have, would be a lot of a guard's data spent to reproduce something their phone already
+     * does well.
+     */
+    @GET("documents/{identifier}")
+    suspend fun document(@Path("identifier") identifier: String): Envelope<DocumentDto>
 }

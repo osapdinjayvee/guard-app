@@ -19,7 +19,7 @@ import androidx.room.TypeConverters
         AnnouncementEntity::class,
         EvaluationQuestionEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(SyncStatusConverter::class, AttendanceTypeConverter::class)

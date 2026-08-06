@@ -11,12 +11,23 @@ import androidx.room.PrimaryKey
  * basement. A roster fetched at the moment of scanning would make the whole flow depend on a
  * network the app is designed to work without.
  *
- * Keyed on the date, because a guard has exactly one duty per day.
+ * Keyed on a surrogate id, because a day may hold more than one shift.
+ *
+ * It used to be keyed on the date, on the reasoning that a guard has exactly one duty per day. They
+ * do not. The office splits shifts, covers absences, and overrides a rest day into work — and a
+ * guard whose 06:00 was cancelled and replaced by a 15:00 legitimately holds two entries against
+ * the same date. With the date as the primary key the second silently overwrote the first, so the
+ * phone kept whichever the server happened to list last and no amount of signing out, back in, or
+ * syncing could produce the other one. The roster was being collapsed on arrival, every time.
+ *
+ * The table is cleared and rewritten on every refresh, so the id is never referred to by anything
+ * and never has to survive.
  */
 @Entity(tableName = "schedule")
 data class ScheduleEntity(
-    /** ISO date, `2026-07-12`. The natural key: one duty per guard per day. */
-    @PrimaryKey val date: String,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** ISO date, `2026-07-12`. */
+    val date: String,
     /** `SG` or `RG`. Stored as the server's code — it is the thing the rules are written against. */
     val dutyType: String,
     val dutyName: String?,

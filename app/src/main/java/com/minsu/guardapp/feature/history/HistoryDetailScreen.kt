@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +37,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.minsu.guardapp.core.media.SelfieStore
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.SyncState
 import com.minsu.guardapp.domain.repository.AttendanceRepository
@@ -44,8 +48,12 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -53,14 +61,54 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Where the record's photograph has got to. */
+sealed interface SelfieState {
+    data object Loading : SelfieState
+    data class Ready(val file: File) : SelfieState
+
+    /** Nothing to show and nothing to retry: no photo here, and the server has no copy either. */
+    data object Missing : SelfieState
+
+    /** The server has it; this attempt did not get it. Worth another tap. */
+    data object Failed : SelfieState
+}
+
 @HiltViewModel(assistedFactory = HistoryDetailViewModel.Factory::class)
 class HistoryDetailViewModel @AssistedInject constructor(
     @Assisted private val recordId: String,
     private val attendance: AttendanceRepository,
+    private val selfies: SelfieStore,
 ) : ViewModel() {
 
     val record: StateFlow<AttendanceRecord?> = attendance.observeRecord(recordId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _selfie = MutableStateFlow<SelfieState>(SelfieState.Loading)
+    val selfie: StateFlow<SelfieState> = _selfie.asStateFlow()
+
+    init {
+        // Waits for the record rather than taking a path from the screen, so a record still being
+        // read does not flash up as one that has no photograph.
+        viewModelScope.launch { load(record.filterNotNull().first().selfiePath) }
+    }
+
+    fun retrySelfie() = viewModelScope.launch {
+        val path = record.value?.selfiePath ?: return@launch
+        _selfie.value = SelfieState.Loading
+        load(path)
+    }
+
+    private suspend fun load(path: String) {
+        val file = selfies.resolve(recordId, path)
+
+        _selfie.value = when {
+            file != null -> SelfieState.Ready(file)
+            // Only a photo the server holds can be asked for again. A local file that has gone is
+            // gone — this record never reached the server, so no copy exists to offer.
+            selfies.isRemote(path) -> SelfieState.Failed
+            else -> SelfieState.Missing
+        }
+    }
 
     fun retry() = viewModelScope.launch { attendance.retry(recordId) }
 
@@ -77,6 +125,7 @@ fun HistoryDetailScreen(recordId: String, onBack: () -> Unit) {
             creationCallback = { factory -> factory.create(recordId) },
         )
     val record by viewModel.record.collectAsStateWithLifecycle()
+    val selfie by viewModel.selfie.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -90,7 +139,7 @@ fun HistoryDetailScreen(recordId: String, onBack: () -> Unit) {
 
         val current = record ?: return@Column
 
-        Selfie(current.selfiePath)
+        Selfie(selfie, onRetry = viewModel::retrySelfie)
         Spacer(Modifier.height(16.dp))
 
         GuardCard {
@@ -137,20 +186,77 @@ fun HistoryDetailScreen(recordId: String, onBack: () -> Unit) {
     }
 }
 
+/**
+ * The photograph, wherever it had to come from.
+ *
+ * On a replacement handset the record arrives from the server without its image, and this is where
+ * the image is gone and got — one record at a time, when a guard actually opens it. Downloading
+ * every photo the history brought back would be a few hundred megabytes of their own data spent up
+ * front on pictures nobody asked to see.
+ */
 @Composable
-private fun Selfie(path: String) {
-    val bitmap = remember(path) {
-        File(path).takeIf(File::exists)?.let { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }
-    }
-    if (bitmap == null) {
-        GuardCard { Text("The photo for this record is no longer on this device.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    } else {
-        Image(
-            bitmap = bitmap,
-            contentDescription = "Attendance photo",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f).clip(RoundedCornerShape(24.dp)),
-        )
+private fun Selfie(state: SelfieState, onRetry: () -> Unit) {
+    when (state) {
+        is SelfieState.Ready -> {
+            val bitmap = remember(state.file.path, state.file.lastModified()) {
+                BitmapFactory.decodeFile(state.file.absolutePath)?.asImageBitmap()
+            }
+
+            if (bitmap == null) {
+                GuardCard {
+                    Text(
+                        "The photo for this record could not be opened.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = "Attendance photo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f).clip(RoundedCornerShape(24.dp)),
+                )
+            }
+        }
+
+        SelfieState.Loading -> GuardCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text("Loading the photo…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        SelfieState.Failed -> GuardCard {
+            Text(
+                "The photo is on the server but could not be fetched. Connect to the internet and try again.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onRetry,
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+            ) {
+                Text("Load photo", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Captured on a phone that no longer has the file, and never uploaded, so the server has
+        // nothing to hand back. Said plainly rather than offering a retry that cannot work.
+        SelfieState.Missing -> GuardCard {
+            Text(
+                "The photo for this record is no longer on this device.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

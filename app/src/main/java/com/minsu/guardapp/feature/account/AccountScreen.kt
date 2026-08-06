@@ -218,7 +218,10 @@ private fun SyncCard(
         AccountRow(
             iconRes = R.drawable.ic_dtr,
             title = "Sync now",
-            subtitle = "Upload any queued attendance, and retry anything stuck",
+            // Says both directions, because it does both. On a replacement handset this is the
+            // row a guard looks for to get their history back, and a subtitle that only mentions
+            // uploading sends them looking for a feature that is already under their thumb.
+            subtitle = "Upload anything queued, retry anything stuck, and fetch your records from the server",
             onClick = onSyncNow,
         )
 

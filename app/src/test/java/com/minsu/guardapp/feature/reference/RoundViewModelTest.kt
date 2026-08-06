@@ -2,6 +2,7 @@ package com.minsu.guardapp.feature.reference
 
 import androidx.lifecycle.SavedStateHandle
 import com.minsu.guardapp.core.network.ApiResult
+import com.minsu.guardapp.domain.model.SyncOutcome
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceRecord
@@ -185,7 +186,7 @@ class RoundViewModelTest {
         override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeRejectedCount(): Flow<Int> = MutableStateFlow(0)
         override suspend fun discardRejected(): Int = 0
-        override suspend fun syncNow(): Int = 0
+        override suspend fun syncNow(): SyncOutcome = SyncOutcome()
         override fun observeInRange(
             fromMillis: Long,
             toMillis: Long,
@@ -194,6 +195,6 @@ class RoundViewModelTest {
         override suspend fun lastVisitedCheckpointToday(): Long? = null
         override suspend fun hasTimedOutToday(): Boolean = false
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
-        override suspend fun refreshHistory(): ApiResult<Unit> = ApiResult.Success(Unit)
+        override suspend fun refreshHistory(): ApiResult<Int> = ApiResult.Success(0)
     }
 }

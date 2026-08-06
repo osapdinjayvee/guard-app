@@ -12,6 +12,7 @@ import com.minsu.guardapp.domain.model.Duty
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.EvaluationQuestion
 import com.minsu.guardapp.domain.model.GuardProfile
+import com.minsu.guardapp.domain.model.SyncOutcome
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -74,7 +75,7 @@ interface AttendanceRepository {
      * Fills gaps only. Nothing already on the device is overwritten, so a capture still queued for
      * upload is never displaced by the server's older view of the world.
      */
-    suspend fun refreshHistory(): ApiResult<Unit>
+    suspend fun refreshHistory(): ApiResult<Int>
 
     /** One record, live: the detail screen follows its sync status as the worker runs. */
     fun observeRecord(id: String): Flow<AttendanceRecord?>
@@ -102,10 +103,12 @@ interface AttendanceRepository {
     suspend fun discardRejected(): Int
 
     /**
-     * Re-queues every failed or rejected record and drains the queue now. Returns how many were
-     * un-stuck, which is what "Sync now" reports back.
+     * Catches this device up in both directions.
+     *
+     * Re-queues every failed or rejected record, drains the queue, and pulls back any records the
+     * server holds that this device does not.
      */
-    suspend fun syncNow(): Int
+    suspend fun syncNow(): SyncOutcome
 
     /** Local records captured within [fromMillis, toMillis). The source for Reports. */
     fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>>

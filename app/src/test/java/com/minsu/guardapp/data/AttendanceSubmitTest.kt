@@ -163,21 +163,104 @@ class AttendanceSubmitTest {
         Clock { 5_000L },
     )
 
+    /** A record as the server hands it back: keyed by the uuid it was captured under. */
+    private fun downloaded(clientUuid: String, userId: Long = 7) = AttendanceDto(
+        id = clientUuid.hashCode().toLong(),
+        clientUuid = clientUuid,
+        userId = userId,
+        checkpointId = 1,
+        checkpointCode = "GATE-A",
+        attendanceType = "time_in",
+        // A URL, not a path. The photo stays on the server until somebody opens the record.
+        selfieUrl = "https://guard.minsu.edu.ph/storage/selfies/$clientUuid.jpg",
+        capturedAt = "2026-07-08T09:15:00+08:00",
+        receivedAt = "2026-07-08T09:20:00+08:00",
+        dutiesAcknowledged = false,
+    )
+
+    /** A server holding [total] records, handing back [records] on every page it is asked for. */
+    private class HistoryApi(
+        private val records: List<AttendanceDto> = emptyList(),
+        private val total: Int = 0,
+    ) : FakeGuardApi() {
+        var historyCalls = 0
+        override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> {
+            historyCalls++
+            return PagedEnvelope(records, PageMetaDto(page = page, perPage = perPage, total = total))
+        }
+    }
+
     /**
-     * "Sync now" has to do both halves. Re-queueing without draining leaves the records sitting
+     * "Sync now" has to do all three parts. Re-queueing without draining leaves the records sitting
      * there; draining without re-queueing skips the FAILED and REJECTED rows entirely, which are
-     * the very ones a guard taps the button about.
+     * the very ones a guard taps the button about; and doing neither in reverse — never pulling —
+     * is what made a replacement handset look like it had lost the guard's attendance.
      */
     @Test
-    fun `sync now un-sticks failed records and forces a drain`() = runTest {
+    fun `sync now un-sticks failed records, forces a drain, and pulls history back`() = runTest {
         val dao = RecordingDao()
         val scheduler = RecordingScheduler()
+        val api = HistoryApi()
 
-        repo(dao, scheduler, GuardProfile(1, "Juan", "guard01")).syncNow()
+        val outcome = repo(dao, scheduler, GuardProfile(1, "Juan", "guard01"), api).syncNow()
 
         assertEquals("stuck records must be re-queued", 1, dao.requeueAllCalls)
         assertEquals("the drain must be forced, not merely requested", 1, scheduler.syncNowRequests)
         assertEquals("the KEEP-policy path would be dropped behind a stale request", 0, scheduler.syncRequests)
+        assertEquals("the server must be asked what it holds", 1, api.historyCalls)
+        assertTrue("a reachable server must be reported as reached", outcome.reachedServer)
+    }
+
+    /**
+     * The replacement-handset case, which is the whole reason the pull is here.
+     *
+     * A guard signs in on a new phone with an empty queue and taps Sync. The old behaviour bailed
+     * out before doing anything — nothing was queued, so there was "nothing to sync" — and the
+     * guard was left looking at an empty History concluding their attendance was gone.
+     */
+    @Test
+    fun `sync now reports how many records came back from the server`() = runTest {
+        val dao = RecordingDao()
+        val api = HistoryApi(records = listOf(downloaded("a"), downloaded("b")), total = 2)
+
+        val outcome = repo(dao, RecordingScheduler(), GuardProfile(7, "Juan", "guard01"), api).syncNow()
+
+        assertEquals(2, outcome.downloaded)
+        assertEquals(2, dao.inserted.size)
+    }
+
+    /** A record already on the phone is not "restored" — the count must mean new, not seen. */
+    @Test
+    fun `records already held are not counted as restored`() = runTest {
+        val dao = RecordingDao()
+        dao.inserted += entity("a", 7, SyncStatus.SYNCED)
+        val api = HistoryApi(records = listOf(downloaded("a"), downloaded("b")), total = 2)
+
+        val outcome = repo(dao, RecordingScheduler(), GuardProfile(7, "Juan", "guard01"), api).syncNow()
+
+        assertEquals("only the one this phone had never seen", 1, outcome.downloaded)
+    }
+
+    /**
+     * Offline, the upload half still ran and the pull is reported as not having reached anyone.
+     *
+     * A failed download must not take the whole sync with it: the records it would have fetched
+     * are safe on the server, while the ones in the queue exist only on this phone.
+     */
+    @Test
+    fun `an unreachable server is reported without failing the sync`() = runTest {
+        val dao = RecordingDao()
+        val scheduler = RecordingScheduler()
+        val offline = object : FakeGuardApi() {
+            override suspend fun history(page: Int, perPage: Int): PagedEnvelope<AttendanceDto> =
+                throw java.io.IOException("no route to host")
+        }
+
+        val outcome = repo(dao, scheduler, GuardProfile(1, "Juan", "guard01"), offline).syncNow()
+
+        assertFalse(outcome.reachedServer)
+        assertEquals(0, outcome.downloaded)
+        assertEquals("the queue must still have been drained", 1, scheduler.syncNowRequests)
     }
 
     @Test

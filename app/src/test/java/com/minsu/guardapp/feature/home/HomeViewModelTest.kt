@@ -2,6 +2,7 @@ package com.minsu.guardapp.feature.home
 
 import com.minsu.guardapp.core.connectivity.NetworkMonitor
 import com.minsu.guardapp.core.network.ApiResult
+import com.minsu.guardapp.domain.model.SyncOutcome
 import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceRecord
@@ -66,12 +67,12 @@ class HomeViewModelTest {
         override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeRejectedCount(): Flow<Int> = MutableStateFlow(0)
         override suspend fun discardRejected(): Int = 0
-        override suspend fun syncNow(): Int = 0
+        override suspend fun syncNow(): SyncOutcome = SyncOutcome()
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
         override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
         override suspend fun lastVisitedCheckpointToday(): Long? = null
         override suspend fun hasTimedOutToday(): Boolean = false
-        override suspend fun refreshHistory(): ApiResult<Unit> = ApiResult.Success(Unit)
+        override suspend fun refreshHistory(): ApiResult<Int> = ApiResult.Success(0)
     }
     private val settingsRepo = object : SettingsRepository {
         override fun observe(): Flow<AppSettings> = settings

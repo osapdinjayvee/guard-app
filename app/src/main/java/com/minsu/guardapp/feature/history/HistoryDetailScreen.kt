@@ -120,8 +120,24 @@ class HistoryDetailViewModel @AssistedInject constructor(
 
 @Composable
 fun HistoryDetailScreen(recordId: String, onBack: () -> Unit) {
+    /*
+     * Keyed by the record, and it has to be.
+     *
+     * This screen is rendered inside History and Reports rather than as a navigation destination,
+     * so the ViewModelStoreOwner is the enclosing tab's back-stack entry — the same one for every
+     * record a guard opens. Without a key, `hiltViewModel` stores by ViewModel class name: the
+     * first record opened creates the instance, going back does not clear it because the owner is
+     * still very much alive, and every record opened afterwards gets handed that first instance
+     * back. `creationCallback` is never even called again.
+     *
+     * The result was a guard tapping one attendance and being shown another — the wrong
+     * timestamp, the wrong checkpoint, the wrong selfie, all rendered as though they were right.
+     * On a screen whose entire purpose is to be evidence, that is the worst kind of wrong: it
+     * looks completely correct.
+     */
     val viewModel: HistoryDetailViewModel =
         hiltViewModel<HistoryDetailViewModel, HistoryDetailViewModel.Factory>(
+            key = recordId,
             creationCallback = { factory -> factory.create(recordId) },
         )
     val record by viewModel.record.collectAsStateWithLifecycle()

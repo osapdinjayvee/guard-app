@@ -10,8 +10,16 @@ enum class ReportRange { DAILY, WEEKLY, MONTHLY, CUSTOM }
 /** A half-open window [fromMillis, toMillis) in the device's time zone. */
 data class ReportWindow(val fromMillis: Long, val toMillis: Long)
 
-data class ReportTotals(val timeIn: Int, val timeOut: Int) {
-    val total: Int get() = timeIn + timeOut
+/**
+ * What the window contains, counted by type.
+ *
+ * [visits] is counted because the list below the card shows them: a roving guard's report listed
+ * every checkpoint on the round while the Total above it counted only the two shift boundaries, so
+ * a report of eight rows announced itself as "2". The number and the list have to agree, or the
+ * one a guard trusts is whichever they read first.
+ */
+data class ReportTotals(val timeIn: Int, val timeOut: Int, val visits: Int = 0) {
+    val total: Int get() = timeIn + timeOut + visits
 }
 
 /**
@@ -68,6 +76,7 @@ object ReportRanges {
     fun totalsOf(records: List<AttendanceRecord>): ReportTotals = ReportTotals(
         timeIn = records.count { it.type == AttendanceType.TIME_IN },
         timeOut = records.count { it.type == AttendanceType.TIME_OUT },
+        visits = records.count { it.type == AttendanceType.CHECKPOINT },
     )
 
     private const val DAY = 24 * 60 * 60 * 1000L

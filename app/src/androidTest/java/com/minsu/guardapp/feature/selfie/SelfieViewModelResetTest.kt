@@ -7,6 +7,7 @@ import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.core.location.LocationFix
 import com.minsu.guardapp.core.location.LocationProvider
 import com.minsu.guardapp.core.network.ApiResult
+import com.minsu.guardapp.domain.model.SyncOutcome
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceRecord
@@ -163,13 +164,13 @@ class SelfieViewModelResetTest {
         override fun observeStuckCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeRejectedCount(): Flow<Int> = MutableStateFlow(0)
         override suspend fun discardRejected(): Int = 0
-        override suspend fun syncNow(): Int = 0
+        override suspend fun syncNow(): SyncOutcome = SyncOutcome()
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
             MutableStateFlow(emptyList())
         override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
         override suspend fun lastVisitedCheckpointToday(): Long? = null
         override suspend fun hasTimedOutToday(): Boolean = false
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
-        override suspend fun refreshHistory(): ApiResult<Unit> = ApiResult.Success(Unit)
+        override suspend fun refreshHistory(): ApiResult<Int> = ApiResult.Success(0)
     }
 }

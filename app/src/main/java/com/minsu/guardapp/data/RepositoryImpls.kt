@@ -21,6 +21,7 @@ import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.Duty
+import com.minsu.guardapp.domain.model.SyncOutcome
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
@@ -191,26 +192,31 @@ class DefaultAttendanceRepository @Inject constructor(
     override fun observeRecord(id: String): Flow<AttendanceRecord?> =
         dao.observeById(id).map { it?.toDomain() }
 
-    override suspend fun refreshHistory(): ApiResult<Unit> {
+    override suspend fun refreshHistory(): ApiResult<Int> {
         // Nothing to attribute the records to, and every read is scoped by guard id, so downloading
         // now would file them under -1 and show them to nobody.
-        if (userId() == NO_USER) return ApiResult.Success(Unit)
+        if (userId() == NO_USER) return ApiResult.Success(0)
 
         var page = 1
+        var restored = 0
+
         while (page <= MAX_HISTORY_PAGES) {
             val result = errors.call { api.history(page = page, perPage = HISTORY_PAGE_SIZE) }
-            if (result !is ApiResult.Success) return result.map { }
+            if (result !is ApiResult.Success) return result.map { 0 }
 
             val now = clock.nowMillis()
             // mapNotNull: a record this build cannot read is skipped, not fatal. Losing one row to a
             // format change must not cost the guard the other several hundred.
-            dao.insertDownloaded(result.value.data.mapNotNull { it.toEntity(now) })
+            val rows = dao.insertDownloaded(result.value.data.mapNotNull { it.toEntity(now) })
+            // Room's IGNORE returns -1 for a row already present. Counting only the rest is what
+            // makes the number reported to the guard mean "new to this phone" rather than "seen".
+            restored += rows.count { it != -1L }
 
             val meta = result.value.meta
             if (page * meta.perPage >= meta.total) break
             page++
         }
-        return ApiResult.Success(Unit)
+        return ApiResult.Success(restored)
     }
 
     override suspend fun retry(id: String) {
@@ -245,14 +251,34 @@ class DefaultAttendanceRepository @Inject constructor(
     }
 
     /**
+     * Both directions, because "Sync now" is not a word that means "upload".
+     *
      * Unlike [retry], this always drains — even when nothing was stuck. The queue may hold records
      * that are merely PENDING behind a network that has just come back, and the guard tapping the
      * button is entitled to see them go.
+     *
+     * And it pulls. This used to push only, which was defensible in the code and indefensible on
+     * the screen: a guard setting up a replacement handset taps the one button labelled Sync,
+     * watches nothing happen, and concludes their attendance is gone. The download did exist — it
+     * was reachable only by opening Home, which is not a thing anybody would guess.
+     *
+     * The pull runs after the push is kicked off, not before. A record that exists only on this
+     * phone is the one irreplaceable thing here; getting it moving matters more than filling in
+     * history, and the two do not wait on each other.
      */
-    override suspend fun syncNow(): Int {
+    override suspend fun syncNow(): SyncOutcome {
         val requeued = dao.requeueAll(clock.nowMillis())
         syncScheduler.syncNow()
-        return requeued
+
+        // A failed pull is not a failed sync. Offline, the upload half still happened and is still
+        // worth reporting; the records this would have fetched are safe on the server either way.
+        val pulled = refreshHistory()
+
+        return SyncOutcome(
+            requeued = requeued,
+            downloaded = (pulled as? ApiResult.Success)?.value ?: 0,
+            reachedServer = pulled is ApiResult.Success,
+        )
     }
 
     override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =

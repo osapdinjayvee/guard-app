@@ -194,6 +194,22 @@ data class EvaluationAnswer(
 enum class SyncState { PENDING, SYNCING, SYNCED, FAILED, REJECTED }
 
 /**
+ * What a "Sync now" actually did, in both directions.
+ *
+ * Reported back so the guard is told something true rather than something reassuring. On a
+ * replacement handset the number that matters is [downloaded] — it is the difference between "my
+ * attendance is gone" and "there it is".
+ */
+data class SyncOutcome(
+    /** Stuck records put back in the queue to be tried again. */
+    val requeued: Int = 0,
+    /** Records fetched from the server that this device did not already hold. */
+    val downloaded: Int = 0,
+    /** False when the pull could not run at all — offline, or the server was unreachable. */
+    val reachedServer: Boolean = false,
+)
+
+/**
  * A completed capture, ready to become a durable attendance record. Everything here is settled
  * on-device before submission; the server is never consulted first.
  */

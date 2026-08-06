@@ -101,18 +101,37 @@ class AccountViewModel @Inject constructor(
      */
     fun syncNow() = viewModelScope.launch {
         val state = uiState.value
-        if (!state.hasQueue) {
-            syncMessage.value = "Nothing to sync — every record is already uploaded."
-            return@launch
-        }
 
-        val requeued = attendance.syncNow()
+        /*
+         * Always runs, even with an empty queue.
+         *
+         * This used to return early on `!hasQueue` with "Nothing to sync", which was wrong in the
+         * one case that matters most: a replacement handset has nothing queued *and* nothing at
+         * all, and the guard tapping Sync is asking for their attendance back. They were told
+         * everything was already uploaded — true, useless, and easily read as "your records are
+         * gone". There is always something to do here, because the queue is only half of it.
+         */
+        val outcome = attendance.syncNow()
 
         syncMessage.value = when {
-            !state.isOnline ->
+            // Led with, because on a new device this is the whole reason they tapped.
+            outcome.downloaded > 0 ->
+                "Restored ${outcome.downloaded} record(s) from the server."
+
+            !outcome.reachedServer && state.hasQueue ->
                 "You're offline. ${state.pendingCount + state.stuckCount} record(s) will upload as soon as you reconnect."
-            requeued > 0 -> "Retrying $requeued record(s) the server would not take."
-            else -> "Uploading ${state.pendingCount} record(s)…"
+
+            !outcome.reachedServer ->
+                "You're offline. Nothing could be fetched — connect and try again."
+
+            outcome.requeued > 0 ->
+                "Retrying ${outcome.requeued} record(s) the server would not take."
+
+            state.pendingCount > 0 -> "Uploading ${state.pendingCount} record(s)…"
+
+            // Reached the server, sent nothing, got nothing new. Says *why* it is up to date
+            // rather than the old wording, which claimed only that uploads were done.
+            else -> "Up to date — nothing to upload, and no new records on the server."
         }
     }
 

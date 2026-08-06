@@ -135,6 +135,10 @@ private fun TotalsCard(totals: ReportTotals) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             Stat("Time In", totals.timeIn)
             Stat("Time Out", totals.timeOut)
+            // Shown only to a guard who actually walks a round. A stationed guard records no
+            // visits, and a permanent "Visits 0" beside their shift is a column about somebody
+            // else's job.
+            if (totals.visits > 0) Stat("Visits", totals.visits)
             Stat("Total", totals.total)
         }
     }

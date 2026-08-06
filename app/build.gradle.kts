@@ -176,6 +176,21 @@ tasks.register("packageUpdate") {
 
     outputs.dir(outputDirectory)
 
+    /*
+     * Never up to date.
+     *
+     * The output directory alone made Gradle think this task had nothing to do: `release` had just
+     * bumped version.properties and tagged v0.3.1, `packageUpdate` reported BUILD SUCCESSFUL, and
+     * the directory still held v0.3.0's APK and manifest from the previous run. Both stale, both
+     * internally consistent, and both about to be uploaded as the new release — the exact class of
+     * failure the generated manifest exists to prevent, arrived at from the other direction.
+     *
+     * Declaring version.properties and the APK as inputs would be the tidier fix and would still
+     * miss the case that matters: this task is only ever run when somebody means to publish, and
+     * an up-to-date check that quietly does nothing is worth less than the second it saves.
+     */
+    outputs.upToDateWhen { false }
+
     doLast {
         // An unsigned APK is not a lesser artefact, it is an unusable one: Android refuses to
         // install it at all. Caught here rather than on a handset, because the only way to

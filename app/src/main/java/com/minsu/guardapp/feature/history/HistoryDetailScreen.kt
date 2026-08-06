@@ -215,6 +215,19 @@ fun HistoryDetailScreen(recordId: String, onBack: () -> Unit) {
  */
 @Composable
 private fun Selfie(state: SelfieState, onRetry: () -> Unit) {
+    /*
+     * Every state fills the same box.
+     *
+     * The placeholders used to be small cards, so the page reflowed the instant a photo arrived —
+     * everything below it jumping down by two-thirds of a screen, often just as the guard was
+     * reaching for it. Holding the frame at the photo's own shape means the only thing that
+     * changes is the thing they are waiting for.
+     */
+    val frame = Modifier
+        .fillMaxWidth()
+        .aspectRatio(3f / 4f)
+        .clip(RoundedCornerShape(24.dp))
+
     when (state) {
         is SelfieState.Ready -> {
             val bitmap = remember(state.file.path, state.file.lastModified()) {
@@ -222,9 +235,10 @@ private fun Selfie(state: SelfieState, onRetry: () -> Unit) {
             }
 
             if (bitmap == null) {
-                GuardCard {
+                Placeholder(frame) {
                     Text(
                         "The photo for this record could not be opened.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -233,29 +247,28 @@ private fun Selfie(state: SelfieState, onRetry: () -> Unit) {
                     bitmap = bitmap,
                     contentDescription = "Attendance photo",
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f).clip(RoundedCornerShape(24.dp)),
+                    modifier = frame,
                 )
             }
         }
 
-        SelfieState.Loading -> GuardCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(10.dp))
-                Text("Loading the photo…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        SelfieState.Failed -> GuardCard {
+        SelfieState.Loading -> Placeholder(frame) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(12.dp))
             Text(
-                "The photo is on the server but could not be fetched. Connect to the internet and try again.",
+                "Loading the photo…",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(10.dp))
+        }
+
+        SelfieState.Failed -> Placeholder(frame) {
+            Text(
+                "The photo is on the server but could not be fetched.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
             Button(
                 onClick = onRetry,
                 shape = RoundedCornerShape(24.dp),
@@ -270,12 +283,27 @@ private fun Selfie(state: SelfieState, onRetry: () -> Unit) {
 
         // Captured on a phone that no longer has the file, and never uploaded, so the server has
         // nothing to hand back. Said plainly rather than offering a retry that cannot work.
-        SelfieState.Missing -> GuardCard {
+        SelfieState.Missing -> Placeholder(frame) {
             Text(
                 "The photo for this record is no longer on this device.",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** The photo's frame, holding its shape while there is no photo in it. */
+@Composable
+private fun Placeholder(modifier: Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        content()
     }
 }
 

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -232,6 +233,8 @@ private fun VisitSelfie(visit: AttendanceRecord, resolve: suspend (AttendanceRec
     }
 
     if (bitmap == null) {
+        // The same frame the photo will occupy, so the card does not grow under the guard's thumb
+        // as each visit's image arrives.
         Column(
             Modifier
                 .fillMaxWidth()
@@ -241,6 +244,10 @@ private fun VisitSelfie(visit: AttendanceRecord, resolve: suspend (AttendanceRec
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (file == null) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(12.dp))
+            }
             Text(
                 if (file == null) "Loading the photo…" else "The photo is not on this phone.",
                 style = MaterialTheme.typography.bodySmall,

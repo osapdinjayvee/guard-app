@@ -6,7 +6,13 @@ import com.minsu.guardapp.core.connectivity.NetworkMonitor
 import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.DutyAssignment
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.GuardProfile
+import com.minsu.guardapp.feature.reference.Stop
+import com.minsu.guardapp.feature.reference.buildStops
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import com.minsu.guardapp.domain.repository.AnnouncementRepository
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
@@ -37,6 +43,18 @@ data class HomeUiState(
     val isRefreshing: Boolean = false,
     /** Today's duty. Null on a rest day — which Home says plainly rather than leaving blank. */
     val todayDuty: DutyAssignment? = null,
+    /**
+     * Posts on today's round that have not yet met their minimum, with what they have so far.
+     *
+     * Only the outstanding ones. A post that has reached its minimum leaves the list, so what
+     * remains is exactly the work remaining — a guard mid-shift wants the short list of where to
+     * walk next, not the whole round with most of it ticked.
+     *
+     * Empty for a stationed guard, who has one post and no round to walk.
+     */
+    val remainingStops: List<Stop> = emptyList(),
+    /** Today, `yyyy-MM-dd`. Carried so the round's screens can be opened for the right day. */
+    val todayDate: String = "",
 )
 
 @HiltViewModel
@@ -82,8 +100,39 @@ class HomeViewModel @Inject constructor(
                         isRefreshing = current.isRefreshing,
                         todayDuty = current.todayDuty,
                         otherAccountPendingCount = current.otherAccountPendingCount,
+                        remainingStops = current.remainingStops,
+                        todayDate = current.todayDate,
                     )
                 }
+            }
+        }
+
+        /*
+         * What is left of today's round.
+         *
+         * Assembled from the cached posts and the records this device already holds, so it answers
+         * at 3am at a perimeter with no signal — which is exactly when a guard cannot remember
+         * which doors they have already walked to.
+         */
+        viewModelScope.launch {
+            val from = startOfToday()
+            combine(
+                checkpoints.observeActive(),
+                attendance.observeInRange(from, from + DAY_MILLIS),
+                settings.observe(),
+                schedule.observeToday(),
+            ) { posts, records, config, duty ->
+                // A stationed guard has one post and no round. Offering them a list of doors to
+                // walk to would be somebody else's job rendered as their outstanding work.
+                if (duty?.dutyType != DutyType.ROVING) {
+                    return@combine emptyList<Stop>()
+                }
+
+                buildStops(posts, records, config.minVisitsPerCheckpoint)
+                    .filterNot { it.isDone }
+                    .sortedWith(compareBy({ it.visits }, { it.checkpoint.code }))
+            }.collect { stops ->
+                _uiState.update { it.copy(remainingStops = stops, todayDate = todayDate()) }
             }
         }
 
@@ -138,5 +187,25 @@ class HomeViewModel @Inject constructor(
             attendance.refreshHistory()
             _uiState.update { it.copy(isRefreshing = false) }
         }
+    }
+
+    private companion object {
+        const val DAY_MILLIS = 24L * 60 * 60 * 1000
+
+        /**
+         * Midnight to midnight in the guard's own timezone, not UTC's.
+         *
+         * A 23:50 visit belongs to the day the guard thinks it is; bounding the day in UTC would
+         * push a late-evening scan in Manila into tomorrow and drop it out of tonight's round.
+         */
+        fun startOfToday(): Long = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        fun todayDate(): String =
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
     }
 }

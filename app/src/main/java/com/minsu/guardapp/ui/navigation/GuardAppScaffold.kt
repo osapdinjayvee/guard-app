@@ -45,7 +45,9 @@ import com.minsu.guardapp.feature.reference.CheckpointsScreen
 import com.minsu.guardapp.feature.reference.DutiesScreen
 import com.minsu.guardapp.feature.reference.RoundScreen
 import com.minsu.guardapp.feature.reference.ScheduleScreen
+import android.net.Uri
 import com.minsu.guardapp.feature.handbook.HandbookScreen
+import com.minsu.guardapp.feature.reference.CheckpointVisitsScreen
 import com.minsu.guardapp.feature.reports.ReportsScreen
 import com.minsu.guardapp.feature.scan.ScanQrScreen
 
@@ -104,6 +106,11 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
         ) {
             composable(GuardDestination.Home.route) {
                 HomeRoute(
+                    // The post's code and name travel in the route because the visits screen is
+                    // reached from two places and neither owns the checkpoint list.
+                    onOpenStop = { code, name, date ->
+                        navController.navigate("$ROUTE_VISITS/$code/${Uri.encode(name)}/$date")
+                    },
                     onAction = { action ->
                         when (action) {
                             // The four that are bottom-bar destinations navigate as such — the bar
@@ -140,6 +147,15 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             composable(ROUTE_DUTIES) { DutiesScreen(onBack = navController::popBackStack) }
             composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen(onBack = navController::popBackStack) }
             composable(ROUTE_HANDBOOK) { HandbookScreen(onBack = navController::popBackStack) }
+
+            composable("$ROUTE_VISITS/{code}/{name}/{date}") { entry ->
+                CheckpointVisitsScreen(
+                    checkpointCode = entry.arguments?.getString("code").orEmpty(),
+                    checkpointName = entry.arguments?.getString("name").orEmpty(),
+                    date = entry.arguments?.getString("date").orEmpty(),
+                    onBack = navController::popBackStack,
+                )
+            }
         }
     }
 }
@@ -230,3 +246,4 @@ private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
 private const val ROUTE_DUTIES = "reference/duties"
 private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"
 private const val ROUTE_HANDBOOK = "reference/handbook"
+private const val ROUTE_VISITS = "round/visits"

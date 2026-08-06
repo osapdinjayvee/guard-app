@@ -48,6 +48,7 @@ import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
+import com.minsu.guardapp.feature.reference.Stop
 import com.minsu.guardapp.domain.model.GuardProfile
 import com.minsu.guardapp.domain.model.SyncState
 import com.minsu.guardapp.ui.components.GuardCard
@@ -71,18 +72,25 @@ enum class HomeAction { Scan, History, Reports, Schedule, Checkpoints, Duties, A
 @Composable
 fun HomeRoute(
     onAction: (HomeAction) -> Unit = {},
+    onOpenStop: (code: String, name: String, date: String) -> Unit = { _, _, _ -> },
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     // Passed as a slot rather than called inside HomeScreen so the stateless screen — and its
     // @Preview — stay free of the map's hilt-injected ViewModel.
-    HomeScreen(state, onAction = onAction, locationSection = { HomeLocationMapSection() })
+    HomeScreen(
+        state,
+        onAction = onAction,
+        onOpenStop = { stop -> onOpenStop(stop.checkpoint.code, stop.checkpoint.name, state.todayDate) },
+        locationSection = { HomeLocationMapSection() },
+    )
 }
 
 @Composable
 fun HomeScreen(
     state: HomeUiState,
     onAction: (HomeAction) -> Unit = {},
+    onOpenStop: (Stop) -> Unit = {},
     modifier: Modifier = Modifier,
     locationSection: @Composable () -> Unit = {},
 ) {
@@ -104,6 +112,8 @@ fun HomeScreen(
         QuickActions(onAction)
 
         TodayDutyCard(state.todayDuty, onOpen = { onAction(HomeAction.Schedule) })
+
+        RemainingStopsCard(state.remainingStops, onOpenStop = onOpenStop)
 
         locationSection()
 
@@ -299,6 +309,82 @@ private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/**
+ * What is left of the round, and nothing else.
+ *
+ * A post drops off the moment it meets its minimum, so this list is the work remaining rather than
+ * the whole round with most of it ticked. Mid-shift at 3am, the question is which doors are still
+ * owed — not a progress bar.
+ *
+ * Absent entirely for a stationed guard, and absent once the round is done, because an empty card
+ * saying "nothing left" is a row of pixels that has stopped carrying information.
+ */
+@Composable
+private fun RemainingStopsCard(stops: List<Stop>, onOpenStop: (Stop) -> Unit) {
+    if (stops.isEmpty()) return
+
+    GuardCard {
+        Text(
+            "Still to visit",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "${stops.size} post${if (stops.size == 1) "" else "s"} on this shift",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        stops.forEach { stop ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenStop(stop) }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stop.checkpoint.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        stop.checkpoint.code,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // The count, not a tick. "1 of 2" tells a guard how much of this post is left;
+                // "not done" tells them only that it is not done.
+                Text(
+                    "${stop.visits} of ${stop.required}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (stop.visits > 0) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Tap a post to see the photos from the visits you have already made.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

@@ -264,7 +264,10 @@ private fun TorchButton(on: Boolean, onToggle: () -> Unit) {
         modifier = Modifier.size(44.dp),
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_nav_scan),
+            // A bolt, not the QR glyph this used to show. The scanner icon on the torch button
+            // said "scan" on the one control that does not scan, next to a viewfinder already
+            // full of scanning — so the way to get light at an unlit post was to guess.
+            painter = painterResource(R.drawable.ic_flashlight),
             contentDescription = if (on) "Turn the torch off" else "Turn the torch on",
             modifier = Modifier.size(22.dp),
         )

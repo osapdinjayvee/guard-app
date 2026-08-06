@@ -83,6 +83,31 @@ data class RoundUiState(
 }
 
 /**
+ * The round, worked out from the posts and the day's records.
+ *
+ * Shared with Home rather than written twice. Two copies of this would drift, and the way they
+ * would drift is one screen telling a guard a post is done while the other says it is not — on the
+ * one question the round exists to answer.
+ */
+internal fun buildStops(
+    posts: List<Checkpoint>,
+    records: List<AttendanceRecord>,
+    required: Int,
+): List<Stop> = posts.map { post ->
+    // Checkpoint scans only. Time In and Time Out are the bookends of the shift, not stops on the
+    // round, so they do not tick a post off.
+    val visits = records.filter {
+        it.type == AttendanceType.CHECKPOINT && it.checkpointCode.equals(post.code, ignoreCase = true)
+    }
+    Stop(
+        checkpoint = post,
+        visits = visits.size,
+        required = required,
+        lastVisitedAt = visits.maxOfOrNull { it.capturedAt },
+    )
+}
+
+/**
  * A roving guard's round for one date, assembled entirely from what is already on the phone: the
  * cached checkpoint list, and the attendance records this device holds for that day.
  *
@@ -112,20 +137,7 @@ class RoundViewModel @Inject constructor(
 
             RoundUiState(
                 date = date,
-                stops = posts.map { post ->
-                    // Checkpoint scans only. Time In and Time Out are the bookends of the shift, not
-                    // stops on the round, so they do not tick a post off.
-                    val visits = records.filter {
-                        it.type == AttendanceType.CHECKPOINT &&
-                            it.checkpointCode.equals(post.code, ignoreCase = true)
-                    }
-                    Stop(
-                        checkpoint = post,
-                        visits = visits.size,
-                        required = required,
-                        lastVisitedAt = visits.maxOfOrNull { it.capturedAt },
-                    )
-                },
+                stops = buildStops(posts, records, required),
                 timedInAt = records.firstOrNull { it.type == AttendanceType.TIME_IN }?.capturedAt,
                 timedOutAt = records.firstOrNull { it.type == AttendanceType.TIME_OUT }?.capturedAt,
             )
@@ -144,12 +156,31 @@ fun RoundScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Tapping a post opens its full-screen map. A nested view rather than a scaffold destination, so
-    // the bottom navigation stays visible while it is open. Survives rotation via the checkpoint id.
+    /*
+     * Tapping a post opens its visits — the photographs behind the count — rather than the map it
+     * used to open. The count is the claim; the selfies are the evidence, and a guard checking
+     * whether they have really done a post wants the second. The map is still a tap away from
+     * there, for the case the screen used to serve: finding a post they have not reached yet.
+     *
+     * Nested views rather than scaffold destinations, so the bottom navigation stays visible.
+     * Survives rotation via the checkpoint id.
+     */
     var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showMap by rememberSaveable { mutableStateOf(false) }
     val selected = selectedId?.let { id -> state.stops.firstOrNull { it.checkpoint.id == id }?.checkpoint }
+
     if (selected != null) {
-        CheckpointMapScreen(checkpoint = selected, onBack = { selectedId = null })
+        if (showMap) {
+            CheckpointMapScreen(checkpoint = selected, onBack = { showMap = false })
+        } else {
+            CheckpointVisitsScreen(
+                checkpointCode = selected.code,
+                checkpointName = selected.name,
+                date = state.date,
+                onBack = { selectedId = null },
+                onShowMap = { showMap = true },
+            )
+        }
         return
     }
 

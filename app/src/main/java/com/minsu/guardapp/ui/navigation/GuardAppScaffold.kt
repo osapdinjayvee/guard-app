@@ -42,7 +42,6 @@ import com.minsu.guardapp.feature.home.HomeAction
 import com.minsu.guardapp.feature.home.HomeRoute
 import com.minsu.guardapp.feature.reference.AnnouncementsScreen
 import com.minsu.guardapp.feature.reference.CheckpointsScreen
-import com.minsu.guardapp.feature.reference.DutiesScreen
 import com.minsu.guardapp.feature.reference.RoundScreen
 import com.minsu.guardapp.feature.reference.ScheduleScreen
 import android.net.Uri
@@ -122,7 +121,6 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             HomeAction.Schedule -> navController.navigateToTopLevel(GuardDestination.Schedule)
 
                             HomeAction.Checkpoints -> navController.navigate(ROUTE_CHECKPOINTS)
-                            HomeAction.Duties -> navController.navigate(ROUTE_DUTIES)
                             HomeAction.Announcements -> navController.navigate(ROUTE_ANNOUNCEMENTS)
 
                             HomeAction.Handbook -> navController.navigate(ROUTE_HANDBOOK)
@@ -144,7 +142,6 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             // Reference screens, reached from Home's tiles. Not bottom-bar destinations: they are
             // things a guard looks up, not places they work from.
             composable(ROUTE_CHECKPOINTS) { CheckpointsScreen(onBack = navController::popBackStack) }
-            composable(ROUTE_DUTIES) { DutiesScreen(onBack = navController::popBackStack) }
             composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen(onBack = navController::popBackStack) }
             composable(ROUTE_HANDBOOK) { HandbookScreen(onBack = navController::popBackStack) }
 
@@ -243,7 +240,6 @@ private fun NavHostController.navigateToTopLevel(destination: GuardDestination) 
 /** Reference destinations behind Home's tiles. Not part of the bottom bar. */
 private const val ROUTE_ROUND = "schedule/round"
 private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
-private const val ROUTE_DUTIES = "reference/duties"
 private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"
 private const val ROUTE_HANDBOOK = "reference/handbook"
 private const val ROUTE_VISITS = "round/visits"

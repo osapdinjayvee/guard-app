@@ -624,6 +624,31 @@ class ScanViewModelTest {
         assertTrue(state.notice!!.contains("Time In first"))
     }
 
+    /**
+     * The same rule, said only to the guard it concerns.
+     *
+     * A stationed guard is never offered a checkpoint visit at all, so a notice explaining why it
+     * is missing lands over the two buttons they *do* have and reads as a warning about those. A
+     * guard moved from roving to stationed asked whether Time Out had been disabled; it had not.
+     * Both buttons work, and nothing needed saying.
+     */
+    @Test
+    fun `a stationed guard is not told about patrols`() = runTest {
+        val vm = scanner(
+            schedule = stationed(), // no Time In yet, which is when the notice used to appear
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertEquals(listOf(AttendanceType.TIME_IN, AttendanceType.TIME_OUT), state.allowedTypes)
+        assertNull("nothing is missing, so there is nothing to explain", state.notice)
+    }
+
     @Test
     fun `a checkpoint visit is offered once the guard has timed in`() = runTest {
         val vm = scanner(

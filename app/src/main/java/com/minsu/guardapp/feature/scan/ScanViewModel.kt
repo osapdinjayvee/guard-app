@@ -198,9 +198,16 @@ class ScanViewModel @Inject constructor(
 
         // A patrol starts when the shift does. A checkpoint visit before any Time In would be
         // evidence of a round walked by someone who, on paper, had not clocked on.
+        //
+        // Said only to a guard who patrols. A stationed guard was never offered a checkpoint visit
+        // in the first place, so telling them "a patrol starts when your shift does" explains the
+        // absence of a button they have never had, over the two buttons they do have — which reads
+        // as a warning about those, and is why a stationed guard asked whether Time Out was broken.
         if (!timedInToday) {
             types = types - AttendanceType.CHECKPOINT
-            notices += "Time In first — a patrol starts when your shift does."
+            if (duty.dutyType == DutyType.ROVING) {
+                notices += "Time In first — a patrol starts when your shift does."
+            }
         }
 
         // A patrol is movement. Scanning the same door twice in succession is a guard standing

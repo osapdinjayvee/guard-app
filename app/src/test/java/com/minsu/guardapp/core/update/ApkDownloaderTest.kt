@@ -157,4 +157,67 @@ class ApkDownloaderTest {
 
         assertFalse("a superseded APK is dead weight in the cache", previous.exists())
     }
+
+    // --- Clearing up after an install ---
+
+    /**
+     * The install replaces this process, so nothing gets to delete the APK on the way out. The
+     * next launch is the only moment it can be recognised as spent — and until then, tens of
+     * megabytes sit in a cache the guard cannot clear themselves.
+     */
+    @Test
+    fun `an apk this build already is gets thrown away on launch`() = runTest {
+        val installed = File(directory, "guard-10.apk").apply { writeBytes(ByteArray(1024)) }
+
+        val removed = downloader().pruneInstalled(installedVersionCode = 10)
+
+        assertFalse("the guard is running this build; the file is spent", installed.exists())
+        assertEquals(1, removed)
+    }
+
+    @Test
+    fun `an older download is thrown away too`() = runTest {
+        val older = File(directory, "guard-8.apk").apply { writeBytes(ByteArray(1024)) }
+
+        downloader().pruneInstalled(installedVersionCode = 10)
+
+        assertFalse(older.exists())
+    }
+
+    /** A download the guard may be moments from installing. Deleting it costs them the bytes again. */
+    @Test
+    fun `a newer download is kept`() = runTest {
+        val pending = File(directory, "guard-11.apk").apply { writeBytes(ByteArray(1024)) }
+
+        val removed = downloader().pruneInstalled(installedVersionCode = 10)
+
+        assertTrue("this is the next update, not a leftover", pending.exists())
+        assertEquals(0, removed)
+    }
+
+    /**
+     * Anything not named by [ApkDownloader.download] is not ours to reason about.
+     *
+     * A name that failed to parse and was deleted anyway would be a worse bug than the untidiness
+     * this method exists to fix.
+     */
+    @Test
+    fun `a file this class did not write is left alone`() = runTest {
+        val stranger = File(directory, "something-else.txt").apply { writeBytes(ByteArray(8)) }
+        val malformed = File(directory, "guard-.apk").apply { writeBytes(ByteArray(8)) }
+
+        downloader().pruneInstalled(installedVersionCode = 10)
+
+        assertTrue(stranger.exists())
+        assertTrue(malformed.exists())
+    }
+
+    /** An empty cache, or none at all, is the ordinary case and must not throw. */
+    @Test
+    fun `nothing to prune is not an error`() = runTest {
+        assertEquals(0, downloader().pruneInstalled(installedVersionCode = 10))
+
+        directory.deleteRecursively()
+        assertEquals(0, downloader().pruneInstalled(installedVersionCode = 10))
+    }
 }

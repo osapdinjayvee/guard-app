@@ -76,6 +76,29 @@ class ApkDownloader @Inject constructor(
     }
 
     /**
+     * Throws away cached APKs this handset has already installed, or moved past.
+     *
+     * Nothing deletes the file at the moment of installing: the app hands the APK to Android's
+     * package installer and its own process is replaced by the new build, so there is no "install
+     * finished" to hook. What there is, is the next launch — where the app knows its own version,
+     * and every cached APK at or below it is by definition already installed or superseded. It
+     * catches the downloaded-but-never-installed case for free.
+     *
+     * A file for a *newer* version is kept: that is a download the guard may still be about to
+     * install, and deleting it would make them fetch tens of megabytes again.
+     *
+     * @return how many files were removed, so a test can say what happened.
+     */
+    suspend fun pruneInstalled(installedVersionCode: Int): Int = withContext(Dispatchers.IO) {
+        directory.listFiles().orEmpty().count { file ->
+            // An unrecognised name is not ours to reason about, and is left alone. A parse that
+            // failed silently deleting a stranger's file would be a worse bug than the tidying.
+            val code = VERSION_IN_NAME.matchEntire(file.name)?.groupValues?.get(1)?.toIntOrNull()
+            code != null && code <= installedVersionCode && file.delete()
+        }
+    }
+
+    /**
      * Fetches [update]'s APK into the cache and verifies it.
      *
      * Cancellation-safe: a partial file is deleted rather than left to be mistaken for a
@@ -183,5 +206,8 @@ class ApkDownloader @Inject constructor(
 
     private companion object {
         const val PROGRESS_STEP_BYTES = 256L * 1024
+
+        /** Matches the names [download] writes, and nothing else in that directory. */
+        val VERSION_IN_NAME = Regex("""guard-(\d+)\.apk""")
     }
 }

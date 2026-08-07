@@ -2,6 +2,7 @@ package com.minsu.guardapp.feature.update
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.minsu.guardapp.core.di.InstalledVersionCode
 import com.minsu.guardapp.core.update.ApkDownloader
 import com.minsu.guardapp.core.update.ApkInstaller
 import com.minsu.guardapp.core.update.AppUpdate
@@ -50,6 +51,7 @@ class UpdateViewModel @Inject constructor(
     private val repository: UpdateRepository,
     private val downloader: ApkDownloader,
     private val installer: ApkInstaller,
+    @InstalledVersionCode private val installedVersionCode: Int,
 ) : ViewModel() {
 
     private val permissionNeeded = MutableStateFlow(false)
@@ -103,6 +105,12 @@ class UpdateViewModel @Inject constructor(
 
     /** The quiet path, run on launch. Says nothing when it fails. */
     fun checkQuietly() = viewModelScope.launch {
+        // Launch is the only moment an already-installed APK can be recognised as spent: the
+        // install replaces this process, so nothing gets to clean up on the way out. Done before
+        // the check, and independently of whether it succeeds — reclaiming tens of megabytes of
+        // the guard's storage should not wait on the update server being reachable.
+        downloader.pruneInstalled(installedVersionCode)
+
         repository.check(force = false)
     }
 

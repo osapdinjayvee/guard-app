@@ -625,6 +625,39 @@ class ScanViewModelTest {
     }
 
     /**
+     * Every rule firing at once must still leave the guard somewhere to go.
+     *
+     * The worst moment reachable in this app: a rover at the last post they still owe, having just
+     * scanned it, at the end of a shift. Time In is spent, Checkpoint is blocked because they have
+     * only just been here, Time Out is blocked because this post is short — and the card came out
+     * with no buttons at all. A guard trying to go home, reading what they cannot do, with nothing
+     * to tap. The buttons are genuinely all unavailable; what is not acceptable is saying nothing
+     * about the way out.
+     */
+    @Test
+    fun `a guard with nothing they can record is told what to do instead`() = runTest {
+        val vm = scanner(
+            schedule = FakeRoster(timedInAt = gateA.id),
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            // GATE-A is one short, CLINIC is done, and GATE-A was the last post scanned.
+            visits = mapOf(gateA.id to 1, clinic.id to 2),
+            lastVisited = gateA.id,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertTrue("the dead end this guards against", state.allowedTypes.isEmpty())
+        assertTrue(
+            "an empty card must still say where to go: ${state.notice}",
+            state.notice!!.contains("Visit another post first"),
+        )
+    }
+
+    /**
      * The same rule, said only to the guard it concerns.
      *
      * A stationed guard is never offered a checkpoint visit at all, so a notice explaining why it

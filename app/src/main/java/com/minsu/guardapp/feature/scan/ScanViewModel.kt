@@ -240,6 +240,19 @@ class ScanViewModel @Inject constructor(
             }
         }
 
+        // Every rule can fire at once, and then there is nothing left to offer.
+        //
+        // It happens at the worst moment: a rover standing at the last post they still owe, having
+        // just scanned it, at the end of the shift. Time In is spent, Checkpoint is blocked because
+        // they have only just been here, and Time Out is blocked because this post is short. The
+        // card came out with no buttons at all — a guard trying to go home, reading two paragraphs
+        // about what they cannot do, with nothing to tap.
+        //
+        // The way out is always the same, so it is said plainly rather than left to be deduced.
+        if (types.isEmpty()) {
+            notices += "Visit another post first, then come back here."
+        }
+
         return ScanState.ChoosingType(
             checkpoint = checkpoint,
             allowedTypes = types,

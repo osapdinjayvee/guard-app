@@ -382,8 +382,21 @@ private fun TypeChoice(
             }
         }
         Spacer(Modifier.height(6.dp))
-        TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-            Text("Scan a different checkpoint", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        // When every rule has fired there is nothing to record here, and this is the only thing
+        // left to do — so it stops being the quiet way out and becomes the action. A card whose
+        // only control is styled as an afterthought reads as a dead end.
+        if (allowedTypes.isEmpty()) {
+            TypeButton(
+                label = "Scan another checkpoint",
+                filled = true,
+                onClick = onCancel,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                Text("Scan a different checkpoint", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

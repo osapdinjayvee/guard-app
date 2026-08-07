@@ -313,12 +313,21 @@ interface AttendanceDao {
      * anywhere. Counted locally, not asked of the server: a guard finishing a round in a dead spot
      * still has every scan on the handset, and gating their Time Out on a network call would strand
      * them at the end of a shift.
+     *
+     * The Time In counts as a visit to the post it was taken at. The guard stood there and the
+     * selfie proves it, and counting only checkpoint scans left the post where the shift opened
+     * permanently one visit behind every other — which, since the same post cannot be scanned twice
+     * in a row, meant a detour at the end of an eight-hour round to satisfy a requirement already
+     * met in substance. The server applies the same rule; if these two ever disagree, the app
+     * offers a Time Out the server then refuses.
+     *
+     * A Time Out is not counted: it cannot contribute to the round it is asking permission for.
      */
     @Query(
         """
         SELECT checkpointId AS checkpointId, COUNT(*) AS visits FROM attendance
         WHERE userId = :userId
-          AND attendanceType = 'CHECKPOINT'
+          AND attendanceType IN ('CHECKPOINT', 'TIME_IN')
           AND capturedAt >= :fromMillis AND capturedAt < :toMillis
         GROUP BY checkpointId
         """

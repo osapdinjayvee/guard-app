@@ -70,21 +70,49 @@ class RoundViewModelTest {
     }
 
     /**
-     * Time In and Time Out happen *at* a checkpoint, but they are the bookends of the shift, not
-     * stops on the round. If they ticked a post off, a guard who timed in at the Main Gate would be
-     * told they had already patrolled it — and would skip it.
+     * The Time In counts as one visit to the post it was taken at — and only one.
+     *
+     * This reverses the earlier rule, which counted checkpoint scans alone. The concern then was
+     * that crediting the Time In would tell a guard they had already patrolled the post they
+     * clocked on at, and they would skip it. With two visits required that does not follow: the
+     * post shows 1 of 2 and still appears in the list of what is left. What the old rule actually
+     * produced was the opposite failure — the post where the shift opened was permanently one
+     * visit behind every other, and since the same post cannot be scanned twice in a row, closing
+     * the shift meant a detour at the end of an eight-hour round.
+     *
+     * The server counts it the same way. If these ever diverge the app offers a Time Out that is
+     * then refused, which is the worst place to find out.
+     *
+     * Note the consequence where only *one* visit is required: there, a Time In alone completes
+     * the post. That is the same principle carried through — the guard was there, with a selfie to
+     * prove it — but it is a real change for any campus configured that way.
      */
     @Test
-    fun `timing in at a post does not scan that post`() = runTest {
+    fun `timing in at a post counts as one visit to it`() = runTest {
         val state = state(
             posts = listOf(post(1, "CP-MAIN-GATE")),
             records = listOf(record(AttendanceType.TIME_IN, "CP-MAIN-GATE", at = 500L)),
         )
 
+        assertEquals(1, state.stops.single().visits)
+        assertEquals(500L, state.stops.single().lastVisitedAt)
+
+        // One visit of the two: still owed, still listed, not quietly ticked off.
+        assertFalse(state.stops.single().isDone)
         assertEquals(0, state.done)
+        assertEquals(500L, state.timedInAt)
+    }
+
+    /** The Time Out cannot count toward the round it is asking permission for. */
+    @Test
+    fun `timing out at a post does not scan that post`() = runTest {
+        val state = state(
+            posts = listOf(post(1, "CP-MAIN-GATE")),
+            records = listOf(record(AttendanceType.TIME_OUT, "CP-MAIN-GATE", at = 900L)),
+        )
+
         assertEquals(0, state.stops.single().visits)
         assertNull(state.stops.single().lastVisitedAt)
-        assertEquals(500L, state.timedInAt)
     }
 
     /** A record still queued for upload is a scan that happened. The round does not wait on a server. */

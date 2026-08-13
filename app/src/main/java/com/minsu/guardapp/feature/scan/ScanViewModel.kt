@@ -218,8 +218,17 @@ class ScanViewModel @Inject constructor(
                 "scan this one again."
         }
 
-        // The round is every post, twice. Counted from this phone, so a guard finishing a patrol in
-        // a dead spot is not stranded at the end of a shift by a rule that needs the network.
+        // The round is every post, twice — and an unfinished one is now told, not enforced.
+        //
+        // Time Out used to be withheld until every post had its visits. The block landed on the
+        // wrong person: a guard pulled off patrol, sent to an incident, or working a short shift
+        // has done nothing wrong, and withholding the button produced a shift with no closing
+        // record at all — the office loses the evidence of when they went home, and the guard
+        // loses the proof they worked it. A missing record is worse evidence than a short one.
+        //
+        // So the shortfall is still counted, still named, and still shown; it just no longer
+        // refuses. The server agrees: it stopped rejecting these too, and the two must not drift
+        // apart or the app offers a Time Out the server then throws away.
         if (duty.dutyType == DutyType.ROVING && config.minVisitsPerCheckpoint > 0) {
             val required = config.minVisitsPerCheckpoint
             val visits = attendance.checkpointVisitsToday()
@@ -227,16 +236,15 @@ class ScanViewModel @Inject constructor(
             val outstanding = posts.filter { (visits[it.id] ?: 0) < required }
 
             if (posts.isNotEmpty() && outstanding.isNotEmpty()) {
-                types = types - AttendanceType.TIME_OUT
-
                 // Names the posts still owed, not just a count. A guard told "4 of 6" at the end of
                 // an eight-hour shift has to work out which two they missed; a guard told "CLINIC,
                 // LIBRARY" can simply walk there.
                 val names = outstanding.take(3).joinToString(", ") { it.code }
                 val more = outstanding.size - minOf(3, outstanding.size)
 
-                notices += "Every post needs at least $required visits. Still to do: $names" +
-                    (if (more > 0) " and $more more." else ".")
+                notices += "Still to do: $names" +
+                    (if (more > 0) " and $more more." else ".") +
+                    " You can still time out."
             }
         }
 

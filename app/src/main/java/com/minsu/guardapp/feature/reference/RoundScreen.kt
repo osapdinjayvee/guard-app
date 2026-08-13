@@ -95,10 +95,12 @@ internal fun buildStops(
     required: Int,
 ): List<Stop> = posts.map { post ->
     // Checkpoint scans, and the Time In at the post it was taken at — the guard stood there, and
-    // the same rule decides whether the server will accept their Time Out, so a progress list that
-    // counted differently would tell them they still owe a visit they do not.
+    // the same count is what the scan card reports as outstanding, so a progress list that counted
+    // differently would tell them they still owe a visit they do not.
     //
-    // The Time Out is not counted: it is what completing the round unlocks.
+    // The Time Out is not counted: it is the end of the shift, not a stop on the round. Finishing
+    // the round no longer gates it — an unwalked post is reported here and to the office, and the
+    // guard can still close their shift.
     val visits = records.filter {
         it.checkpointCode.equals(post.code, ignoreCase = true) &&
             (it.type == AttendanceType.CHECKPOINT || it.type == AttendanceType.TIME_IN)

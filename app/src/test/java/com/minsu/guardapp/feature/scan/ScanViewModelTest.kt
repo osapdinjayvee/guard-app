@@ -397,15 +397,17 @@ class ScanViewModelTest {
     // ---- The two rules that depend on when, not where -------------------------------------------
 
     /**
-     * The round is every post, twice — not two scans anywhere.
+     * An unfinished round is told, not enforced.
      *
-     * A post visited once is not done, and a post never reached is not excused by another post being
-     * finished. Time Out is *removed* rather than shown and refused: a button whose only purpose is
-     * to reject you is a trap. The notice names what is still owed, because a guard shown fewer
-     * buttons and no reason has been told nothing.
+     * Time Out used to be withheld until every post had its visits. The block landed on the wrong
+     * person — a guard pulled off patrol, sent to an incident, or working a short shift has done
+     * nothing wrong — and what it produced was a shift with no closing record at all. A missing
+     * record is worse evidence than a short one.
+     *
+     * What is still owed is named, because a guard who can leave should still know what is left.
      */
     @Test
-    fun `a roving guard cannot time out until every post has its visits`() = runTest {
+    fun `a roving guard may time out with the round unfinished, and is told what is left`() = runTest {
         val vm = scanner(
             schedule = roster(),
             checkpoints = FakeCheckpoints(
@@ -419,10 +421,29 @@ class ScanViewModelTest {
         vm.onCodeScanned("GATE-A")
 
         val state = vm.state.value as ScanState.ChoosingType
-        assertFalse(AttendanceType.TIME_OUT in state.allowedTypes)
+        assertTrue("the shift must always be closeable", AttendanceType.TIME_OUT in state.allowedTypes)
         assertTrue(AttendanceType.CHECKPOINT in state.allowedTypes)
         assertTrue(state.notice!!.contains("CLINIC"))
         assertFalse(state.notice!!.contains("GATE-A"))
+        assertTrue(state.notice!!.contains("You can still time out"))
+    }
+
+    /** Nothing walked at all is still a shift that can be closed. */
+    @Test
+    fun `a roving guard who visited no post at all may still time out`() = runTest {
+        val vm = scanner(
+            schedule = roster(),
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            visits = emptyMap(),
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertTrue(AttendanceType.TIME_OUT in state.allowedTypes)
     }
 
     @Test
@@ -627,27 +648,33 @@ class ScanViewModelTest {
     /**
      * Every rule firing at once must still leave the guard somewhere to go.
      *
-     * The worst moment reachable in this app: a rover at the last post they still owe, having just
-     * scanned it, at the end of a shift. Time In is spent, Checkpoint is blocked because they have
-     * only just been here, Time Out is blocked because this post is short — and the card came out
-     * with no buttons at all. A guard trying to go home, reading what they cannot do, with nothing
-     * to tap. The buttons are genuinely all unavailable; what is not acceptable is saying nothing
-     * about the way out.
+     * A rover at a patrol-only post — no Time In or Time Out is possible there — who has just
+     * scanned it. Time In is spent, the two shift types do not belong to this post, and the visit
+     * is blocked as a repeat. The card comes out with no buttons at all: a guard mid-round reading
+     * what they cannot do, with nothing to tap. The buttons are genuinely all unavailable; what is
+     * not acceptable is saying nothing about the way out.
      */
     @Test
     fun `a guard with nothing they can record is told what to do instead`() = runTest {
+        val marker = Checkpoint(
+            id = 7,
+            code = "FENCE-3",
+            name = "Perimeter marker",
+            isActive = true,
+            latitude = null,
+            longitude = null,
+            allowsTimeInOut = false,
+        )
         val vm = scanner(
             schedule = FakeRoster(timedInAt = gateA.id),
             checkpoints = FakeCheckpoints(
-                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
-                active = listOf(gateA, clinic),
+                resolutions = mapOf("FENCE-3" to CheckpointResolution.Resolved(marker)),
+                active = listOf(gateA, marker),
             ),
-            // GATE-A is one short, CLINIC is done, and GATE-A was the last post scanned.
-            visits = mapOf(gateA.id to 1, clinic.id to 2),
-            lastVisited = gateA.id,
+            lastVisited = marker.id,
         )
 
-        vm.onCodeScanned("GATE-A")
+        vm.onCodeScanned("FENCE-3")
 
         val state = vm.state.value as ScanState.ChoosingType
         assertTrue("the dead end this guards against", state.allowedTypes.isEmpty())

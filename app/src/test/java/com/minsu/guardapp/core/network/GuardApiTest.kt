@@ -90,4 +90,36 @@ class GuardApiTest {
         assertEquals(51, page.meta.total)
         assertEquals("/api/attendance/history?page=2&per_page=25", server.takeRequest().path)
     }
+
+    /**
+     * A field the server stops sending must not be able to fail the parse.
+     *
+     * This is not hypothetical. `duties_acknowledged` was removed from the attendance response
+     * while declared here as a required Boolean, so Moshi threw while reading a body the server
+     * had already answered 201 to. The record was safely stored and every guard saw it marked
+     * Rejected — an upload that worked, reported as an upload that was refused.
+     *
+     * The client makes no decision from that field. Nothing it does not act on may be required.
+     */
+    @Test
+    fun `an attendance parses without the fields the client does not act on`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {"data":[{"id":9,"client_uuid":"abc","user_id":3,"qr_checkpoint_id":4,
+                 "attendance_type":"CHECKPOINT","selfie_url":"https://example.test/s.jpg",
+                 "captured_at":"2026-08-14T08:47:00+08:00","received_at":"2026-08-14T08:47:05+08:00"}],
+                 "meta":{"page":1,"per_page":25,"total":1}}
+                """.trimIndent()
+            )
+        )
+
+        val record = api.history(page = 1).data.single()
+
+        assertEquals(9L, record.id)
+        assertEquals("CHECKPOINT", record.attendanceType)
+        // Absent, so the documented default stands rather than the parse failing.
+        assertEquals(false, record.dutiesAcknowledged)
+        assertNull(record.dutiesVersionId)
+    }
 }

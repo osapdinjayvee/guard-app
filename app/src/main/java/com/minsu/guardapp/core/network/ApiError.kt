@@ -46,11 +46,26 @@ sealed interface ApiError {
 val ApiError.isRetriable: Boolean
     get() = when (this) {
         is ApiError.Network, is ApiError.Server -> true
+
+        /*
+         * Retriable, because it is not a refusal.
+         *
+         * [ApiError.Unexpected] is mostly "we could not read the reply", and a reply we could not
+         * read is not a reply that said no. It happened: the server dropped a field this DTO
+         * required, so parsing threw on a body it had already answered 201 to — the attendance was
+         * stored, and every guard was shown Rejected for a record that was safely on the server.
+         *
+         * Retrying is safe because submission is idempotent on `client_uuid`: the second attempt
+         * returns the record the first one created. If the response stays unreadable the record
+         * stays PENDING and is surfaced as stuck, which is the honest description of not knowing.
+         */
+        is ApiError.Unexpected -> true
+
         // Unauthorized is not retriable *now*, but the record stays PENDING and will be
         // retried once the guard re-authenticates. It must never be dropped.
         ApiError.Unauthorized -> false
         is ApiError.Rejected, is ApiError.Validation, ApiError.PayloadTooLarge,
-        ApiError.InvalidCredentials, ApiError.NotFound, is ApiError.Unexpected,
+        ApiError.InvalidCredentials, ApiError.NotFound,
         -> false
     }
 

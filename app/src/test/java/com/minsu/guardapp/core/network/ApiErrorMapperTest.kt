@@ -107,4 +107,24 @@ class ApiErrorMapperTest {
     fun `an unmodelled status does not masquerade as success`() = runTest {
         assertTrue(failWith(http(418)) is ApiError.Unexpected)
     }
+
+    /**
+     * A reply we could not read is not a reply that said no.
+     *
+     * This was classed as permanent, so a queued attendance whose response failed to parse was
+     * marked Rejected. It happened in the field: the server dropped a field the DTO required, the
+     * parse threw on a body that had already been answered 201, and guards were shown Rejected for
+     * records sitting safely on the server.
+     *
+     * Retrying is safe — submission is idempotent on client_uuid, so the retry returns the record
+     * the first attempt created. If it stays unreadable the record stays PENDING and is surfaced
+     * as stuck, which is the honest description of not knowing.
+     */
+    @Test
+    fun `a response we could not parse is retried, not rejected`() = runTest {
+        val error = failWith(com.squareup.moshi.JsonDataException("Required value 'x' missing"))
+
+        assertTrue(error is ApiError.Unexpected)
+        assertTrue("a record the server may well hold must not be written off", error.isRetriable)
+    }
 }

@@ -67,7 +67,18 @@ data class AttendanceDto(
     @Json(name = "latitude") val latitude: Double? = null,
     @Json(name = "longitude") val longitude: Double? = null,
     @Json(name = "accuracy") val accuracy: Float? = null,
-    @Json(name = "duties_acknowledged") val dutiesAcknowledged: Boolean,
+    /*
+     * Defaulted, not required — and the reason is worth keeping.
+     *
+     * The server dropped `duties_acknowledged` from this response. Declared as a required Boolean,
+     * its absence made Moshi throw while reading a body the server had already answered 201 to:
+     * the attendance was safely stored, and every guard saw the record marked Rejected. A field
+     * this client does not act on must never be able to do that.
+     *
+     * The rule for everything below: if the app does not make a decision from it, it gets a
+     * default.
+     */
+    @Json(name = "duties_acknowledged") val dutiesAcknowledged: Boolean = false,
     @Json(name = "duties_version_id") val dutiesVersionId: Long? = null,
     @Json(name = "device_id") val deviceId: String? = null,
 )

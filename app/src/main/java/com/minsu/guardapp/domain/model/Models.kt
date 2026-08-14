@@ -15,6 +15,20 @@ data class Checkpoint(
 )
 
 /**
+ * The posts a round is made of.
+ *
+ * A checkpoint where shifts start and end is not a stop on the patrol — the guard's presence there
+ * is already recorded, by the Time In and the Time Out. Counting it again as somewhere to visit
+ * asks them to walk to the door they clocked on at, and puts a post on the round list that is
+ * really the shift's bookends under another name.
+ *
+ * One definition, used by everything that speaks about the round: the scan card's outstanding
+ * list, the Home remaining-stops card, and the Round screen. They must never disagree about what
+ * the round is.
+ */
+fun List<Checkpoint>.roundPosts(): List<Checkpoint> = filterNot { it.allowsTimeInOut }
+
+/**
  * The outcome of scanning a QR code.
  *
  * [Disabled] is distinct from [Unknown] on purpose: a guard scanning a retired checkpoint

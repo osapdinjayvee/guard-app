@@ -8,6 +8,7 @@ import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.domain.model.DutyType
+import com.minsu.guardapp.domain.model.roundPosts
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
@@ -232,7 +233,7 @@ class ScanViewModel @Inject constructor(
         if (duty.dutyType == DutyType.ROVING && config.minVisitsPerCheckpoint > 0) {
             val required = config.minVisitsPerCheckpoint
             val visits = attendance.checkpointVisitsToday()
-            val posts = checkpoints.observeActive().first()
+            val posts = checkpoints.observeActive().first().roundPosts()
             val outstanding = posts.filter { (visits[it.id] ?: 0) < required }
 
             if (posts.isNotEmpty() && outstanding.isNotEmpty()) {

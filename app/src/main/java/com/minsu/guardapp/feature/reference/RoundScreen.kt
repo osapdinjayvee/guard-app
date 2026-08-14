@@ -38,6 +38,7 @@ import androidx.lifecycle.viewModelScope
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
+import com.minsu.guardapp.domain.model.roundPosts
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
@@ -143,7 +144,7 @@ class RoundViewModel @Inject constructor(
 
             RoundUiState(
                 date = date,
-                stops = buildStops(posts, records, required),
+                stops = buildStops(posts.roundPosts(), records, required),
                 timedInAt = records.firstOrNull { it.type == AttendanceType.TIME_IN }?.capturedAt,
                 timedOutAt = records.firstOrNull { it.type == AttendanceType.TIME_OUT }?.capturedAt,
             )

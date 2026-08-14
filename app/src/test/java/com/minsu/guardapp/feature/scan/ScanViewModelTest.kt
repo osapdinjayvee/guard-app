@@ -97,7 +97,17 @@ class ScanViewModelTest {
     )
 
     private val gateA = Checkpoint(1, "GATE-A", "Main Gate", isActive = true, latitude = null, longitude = null)
-    private val clinic = Checkpoint(2, "CLINIC", "Clinic", isActive = true, latitude = null, longitude = null)
+    /**
+     * A patrol stop, which is what a round is made of.
+     *
+     * [gateA] is left as a shift post — it is where these tests time in — and a shift post is not
+     * a stop on the round: the guard's presence there is already recorded by the Time In and the
+     * Time Out.
+     */
+    private val clinic = Checkpoint(
+        2, "CLINIC", "Clinic", isActive = true, latitude = null, longitude = null,
+        allowsTimeInOut = false,
+    )
     private val roofOld = Checkpoint(4, "ROOF-OLD", "Rooftop", isActive = false, latitude = null, longitude = null)
 
     @Before fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())

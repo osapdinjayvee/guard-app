@@ -8,6 +8,7 @@ import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.GuardProfile
+import com.minsu.guardapp.domain.model.roundPosts
 import com.minsu.guardapp.feature.reference.Stop
 import com.minsu.guardapp.feature.reference.buildStops
 import java.text.SimpleDateFormat
@@ -128,7 +129,7 @@ class HomeViewModel @Inject constructor(
                     return@combine emptyList<Stop>()
                 }
 
-                buildStops(posts, records, config.minVisitsPerCheckpoint)
+                buildStops(posts.roundPosts(), records, config.minVisitsPerCheckpoint)
                     .filterNot { it.isDone }
                     .sortedWith(compareBy({ it.visits }, { it.checkpoint.code }))
             }.collect { stops ->

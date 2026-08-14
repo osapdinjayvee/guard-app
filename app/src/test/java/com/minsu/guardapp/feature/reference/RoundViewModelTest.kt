@@ -41,6 +41,29 @@ class RoundViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     /**
+     * A post where shifts start and end is not a stop on the round.
+     *
+     * The guard's presence at the guard house is already recorded — twice, by the Time In and the
+     * Time Out. Listing it again as somewhere to visit asks them to walk to the door they clocked
+     * on at, and puts the shift's bookends on the round list under another name.
+     */
+    @Test
+    fun `a shift post is not a stop on the round`() = runTest {
+        val state = state(
+            posts = listOf(
+                post(1, "GUARD_HOUSE", allowsTimeInOut = true),
+                post(2, "CP-LIBRARY"),
+            ),
+            records = listOf(record(AttendanceType.TIME_IN, "GUARD_HOUSE", at = 500L)),
+        )
+
+        assertEquals(listOf("CP-LIBRARY"), state.stops.map { it.checkpoint.code })
+        assertEquals(1, state.total)
+        // The Time In still shows as the shift's opening; it is simply not a patrol stop.
+        assertEquals(500L, state.timedInAt)
+    }
+
+    /**
      * One visit is not a finished post. The round is every post, the required number of times, and a
      * post visited once must not look identical to one that is done.
      */
@@ -160,13 +183,21 @@ class RoundViewModelTest {
         return viewModel.uiState.value
     }
 
-    private fun post(id: Long, code: String) = Checkpoint(
+    /**
+     * A stop on the round, which means a patrol post.
+     *
+     * Defaulted to `allowsTimeInOut = false` because that is what a round is made of. A post where
+     * shifts start and end is not a stop: the guard's presence there is already recorded by the
+     * Time In and the Time Out.
+     */
+    private fun post(id: Long, code: String, allowsTimeInOut: Boolean = false) = Checkpoint(
         id = id,
         code = code,
         name = code,
         isActive = true,
         latitude = null,
         longitude = null,
+        allowsTimeInOut = allowsTimeInOut,
     )
 
     private fun record(

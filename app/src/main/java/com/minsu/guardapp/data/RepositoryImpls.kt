@@ -14,6 +14,7 @@ import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
 import com.minsu.guardapp.core.network.map
 import com.minsu.guardapp.core.sync.SyncScheduler
+import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceDraft
 import com.minsu.guardapp.domain.model.AttendanceType
@@ -287,45 +288,29 @@ class DefaultAttendanceRepository @Inject constructor(
                 .map { entities -> entities.map { it.toDomain() } }
         }
 
-    /**
-     * Midnight to midnight in the guard's own timezone, not UTC's — a 23:50 scan belongs to the day
-     * the guard thinks it is, and bounding the day in UTC would push a late-evening visit in Manila
-     * into tomorrow and lose it from tonight's round.
+    /*
+     * Counted over the shift, not over the day.
+     *
+     * These were bounded midnight to midnight, which is right for a shift that begins and ends on
+     * one date and wrong for every night shift. At 00:00 a rover's round reset to zero, the Time
+     * Out they had not yet recorded looked un-recorded in a new day, and the post they clocked on
+     * at was forgotten — mid-shift, with no way for the guard to tell what had happened.
+     *
+     * The caller passes the window because the caller is the one that knows which shift is running;
+     * see `DutyAssignment.attendanceWindow()`, which falls back to the local day for a duty the
+     * office filed without hours.
      */
-    override suspend fun checkpointVisitsToday(): Map<Long, Int> {
-        val (from, to) = todayBounds()
-
-        return dao.checkpointVisitCountsBetween(userId(), from, to)
+    override suspend fun checkpointVisitsIn(window: ShiftWindow): Map<Long, Int> =
+        dao.checkpointVisitCountsBetween(userId(), window.start, window.end)
             .associate { it.checkpointId to it.visits }
-    }
 
-    override suspend fun lastVisitedCheckpointToday(): Long? {
-        val (from, to) = todayBounds()
+    override suspend fun lastVisitedCheckpointIn(window: ShiftWindow): Long? =
+        dao.lastVisitedCheckpointBetween(userId(), window.start, window.end)
 
-        return dao.lastVisitedCheckpointBetween(userId(), from, to)
-    }
-
-    override suspend fun hasTimedOutToday(): Boolean {
-        val (from, to) = todayBounds()
-
-        return dao.firstTimeOutBetween(userId(), from, to) != null
-    }
+    override suspend fun hasTimedOutIn(window: ShiftWindow): Boolean =
+        dao.firstTimeOutBetween(userId(), window.start, window.end) != null
 
     private suspend fun userId(): Long = profiles.observe().first()?.id ?: NO_USER
-
-    private fun todayBounds(): Pair<Long, Long> {
-        val start = Calendar.getInstance().apply {
-            timeInMillis = clock.nowMillis()
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val from = start.timeInMillis
-        start.add(Calendar.DAY_OF_MONTH, 1)
-
-        return from to start.timeInMillis
-    }
 
     override suspend fun submit(id: String, draft: AttendanceDraft) {
         val now = clock.nowMillis()

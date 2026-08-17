@@ -1,5 +1,7 @@
 package com.minsu.guardapp.feature.home
 
+import com.minsu.guardapp.core.common.Clock
+import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.core.connectivity.NetworkMonitor
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.domain.model.SyncOutcome
@@ -69,9 +71,9 @@ class HomeViewModelTest {
         override suspend fun discardRejected(): Int = 0
         override suspend fun syncNow(): SyncOutcome = SyncOutcome()
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
-        override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
-        override suspend fun lastVisitedCheckpointToday(): Long? = null
-        override suspend fun hasTimedOutToday(): Boolean = false
+        override suspend fun checkpointVisitsIn(window: ShiftWindow): Map<Long, Int> = emptyMap()
+        override suspend fun lastVisitedCheckpointIn(window: ShiftWindow): Long? = null
+        override suspend fun hasTimedOutIn(window: ShiftWindow): Boolean = false
         override suspend fun refreshHistory(): ApiResult<Int> = ApiResult.Success(0)
     }
     private val settingsRepo = object : SettingsRepository {
@@ -101,11 +103,11 @@ class HomeViewModelTest {
     }
     private var scheduleRefreshes = 0
     private val scheduleRepo = object : ScheduleRepository {
-        override fun observeToday(): Flow<DutyAssignment?> = MutableStateFlow(null)
+        override fun observeCurrentDuty(): Flow<DutyAssignment?> = MutableStateFlow(null)
         override fun observeAll(): Flow<List<DutyAssignment>> = MutableStateFlow(emptyList())
-        override suspend fun today(): DutyAssignment? = null
+        override suspend fun currentDuty(): DutyAssignment? = null
         override val isLinked: Flow<Boolean> = MutableStateFlow(true)
-        override suspend fun postTimedInAtToday(): Long? = null
+        override suspend fun postTimedInAt(window: ShiftWindow): Long? = null
         override suspend fun refresh(): ApiResult<Unit> {
             scheduleRefreshes++
             return ApiResult.Success(Unit)
@@ -130,7 +132,7 @@ class HomeViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel() =
-        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, monitor)
+        HomeViewModel(profileRepo, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, Clock { NOW }, monitor)
 
     @Test
     fun `streams local state without waiting on the network`() = runTest {
@@ -204,7 +206,7 @@ class HomeViewModelTest {
             override suspend fun clear() = Unit
         }
 
-        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, monitor)
+        val vm = HomeViewModel(failing, attendanceRepo, settingsRepo, announcementRepo, checkpointRepo, dutyRepo, scheduleRepo, evaluationRepo, Clock { NOW }, monitor)
 
         assertEquals("Juan Dela Cruz", vm.uiState.value.profile?.name)
         assertFalse(vm.uiState.value.isRefreshing)
@@ -232,5 +234,10 @@ class HomeViewModelTest {
     @Test
     fun `renders before a profile has ever been fetched`() = runTest {
         assertNull(viewModel().uiState.value.profile)
+    }
+
+    private companion object {
+        /** A fixed "now" so the round's window does not move under the tests. */
+        const val NOW = 1_754_000_000_000L
     }
 }

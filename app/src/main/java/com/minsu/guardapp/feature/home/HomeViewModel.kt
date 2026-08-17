@@ -2,12 +2,14 @@ package com.minsu.guardapp.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.core.connectivity.NetworkMonitor
 import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.GuardProfile
+import com.minsu.guardapp.domain.model.attendanceWindow
 import com.minsu.guardapp.domain.model.roundPosts
 import com.minsu.guardapp.feature.reference.Stop
 import com.minsu.guardapp.feature.reference.buildStops
@@ -68,6 +70,7 @@ class HomeViewModel @Inject constructor(
     private val duties: DutyRepository,
     private val schedule: ScheduleRepository,
     private val evaluations: EvaluationRepository,
+    private val clock: Clock,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
@@ -109,31 +112,45 @@ class HomeViewModel @Inject constructor(
         }
 
         /*
-         * What is left of today's round.
+         * What is left of the round being walked.
          *
          * Assembled from the cached posts and the records this device already holds, so it answers
          * at 3am at a perimeter with no signal — which is exactly when a guard cannot remember
          * which doors they have already walked to.
+         *
+         * Keyed on the shift rather than the calendar day. A rover on a 23:00–07:00 shift used to
+         * watch their whole round reset to zero at midnight, half way through it.
          */
         viewModelScope.launch {
-            val from = startOfToday()
+            // Two days of records, narrowed to the shift below. The observed range cannot depend on
+            // the duty without re-subscribing on every emission, and a night shift never spans more
+            // than yesterday and today.
+            val from = startOfYesterday()
+
             combine(
                 checkpoints.observeActive(),
-                attendance.observeInRange(from, from + DAY_MILLIS),
+                attendance.observeInRange(from, from + 2 * DAY_MILLIS),
                 settings.observe(),
-                schedule.observeToday(),
+                schedule.observeCurrentDuty(),
             ) { posts, records, config, duty ->
                 // A stationed guard has one post and no round. Offering them a list of doors to
                 // walk to would be somebody else's job rendered as their outstanding work.
                 if (duty?.dutyType != DutyType.ROVING) {
-                    return@combine emptyList<Stop>()
+                    return@combine emptyList<Stop>() to duty
                 }
 
-                buildStops(posts.roundPosts(), records, config.minVisitsPerCheckpoint)
+                val window = duty.attendanceWindow(clock.nowMillis())
+                val thisShift = records.filter { it.capturedAt in window }
+
+                buildStops(posts.roundPosts(), thisShift, config.minVisitsPerCheckpoint)
                     .filterNot { it.isDone }
-                    .sortedWith(compareBy({ it.visits }, { it.checkpoint.code }))
-            }.collect { stops ->
-                _uiState.update { it.copy(remainingStops = stops, todayDate = todayDate()) }
+                    .sortedWith(compareBy({ it.visits }, { it.checkpoint.code })) to duty
+            }.collect { (stops, duty) ->
+                _uiState.update {
+                    // The shift's own date, not today's: at 00:30 the round on offer belongs to the
+                    // shift that began yesterday, and opening it should show that day.
+                    it.copy(remainingStops = stops, todayDate = duty?.date ?: todayDate())
+                }
             }
         }
 
@@ -149,9 +166,9 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // The roster governs what the scanner will let the guard do. Until now they could not see it.
+        // The schedule governs what the scanner will let the guard do. Until now they could not see it.
         viewModelScope.launch {
-            schedule.observeToday().collect { duty ->
+            schedule.observeCurrentDuty().collect { duty ->
                 _uiState.update { it.copy(todayDuty = duty) }
             }
         }
@@ -190,23 +207,24 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Only the fallback now: the round's span comes from the shift, and the date shown with it from
+     * the duty. This answers when the office filed no schedule at all.
+     */
+    private fun todayDate(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date(clock.nowMillis()))
+
+    /** Midnight yesterday, in the guard's own timezone — the far edge of any running shift. */
+    private fun startOfYesterday(): Long = Calendar.getInstance().apply {
+        timeInMillis = clock.nowMillis()
+        add(Calendar.DAY_OF_MONTH, -1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
     private companion object {
         const val DAY_MILLIS = 24L * 60 * 60 * 1000
-
-        /**
-         * Midnight to midnight in the guard's own timezone, not UTC's.
-         *
-         * A 23:50 visit belongs to the day the guard thinks it is; bounding the day in UTC would
-         * push a late-evening scan in Manila into tomorrow and drop it out of tonight's round.
-         */
-        fun startOfToday(): Long = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-
-        fun todayDate(): String =
-            SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
     }
 }

@@ -4,31 +4,40 @@ import com.minsu.guardapp.core.database.ScheduleEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 /**
- * Which shift the app calls "today" when the day holds more than one.
+ * Which shift the app is working, when the schedule holds more than one.
  *
- * From the field: a guard's morning shift was cancelled and an afternoon one put in its place. The
- * phone went on showing the cancelled morning, and signing out, back in and syncing changed
- * nothing — the roster cache was keyed on the date, so the second entry overwrote the first on the
- * way in and only ever one survived. Keeping both is half the fix; choosing between them is this.
+ * Two separate reports from the field are pinned here.
+ *
+ * A guard's morning shift was cancelled and an afternoon one put in its place; the phone went on
+ * showing the cancelled morning, because the cache was keyed on the date and only one entry per day
+ * survived. Keeping both was half the fix; choosing between them is this.
+ *
+ * And a night guard rostered 23:00–07:00 was told "not on duty" at half past midnight, in the
+ * middle of their own shift, because this compared clock times with the entry's date thrown away.
+ * Every test below states its date explicitly for that reason: the date is now load-bearing.
  */
 class ScheduleSelectionTest {
 
-    private fun todayAt(hour: Int, minute: Int = 0): Long =
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
+    private val format = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
 
-    private fun shift(id: Long, startsAt: String?, endsAt: String?) = ScheduleEntity(
+    /** An instant, written the way a guard would read it off their phone. */
+    private fun at(iso: String): Long = format.parse(iso)!!.time
+
+    private fun shift(
+        id: Long,
+        startsAt: String?,
+        endsAt: String?,
+        date: String = TODAY,
+        dutyType: String = "SG",
+    ) = ScheduleEntity(
         id = id,
-        date = "2026-08-06",
-        dutyType = "SG",
-        dutyName = "Stationed Guard",
+        date = date,
+        dutyType = dutyType,
+        dutyName = if (dutyType == "OFF") "Day Off" else "Stationed Guard",
         startsAt = startsAt,
         endsAt = endsAt,
         totalHours = 8f,
@@ -44,48 +53,121 @@ class ScheduleSelectionTest {
 
     @Test
     fun `the shift in progress is the one reported`() {
-        assertEquals("15:00:00", splitDay.currentOrNext(todayAt(15, 30))?.startsAt)
+        assertEquals("15:00:00", splitDay.currentOrNext(at("2026-08-17 15:30"), TODAY)?.startsAt)
     }
 
     @Test
     fun `the morning shift is reported while it is still running`() {
-        assertEquals("06:00:00", splitDay.currentOrNext(todayAt(7))?.startsAt)
+        assertEquals("06:00:00", splitDay.currentOrNext(at("2026-08-17 07:00"), TODAY)?.startsAt)
     }
 
     /** 14:30 — the morning is over, the afternoon has not begun. The useful answer is what's next. */
     @Test
     fun `between two shifts the one about to start is reported`() {
-        assertEquals("15:00:00", splitDay.currentOrNext(todayAt(14, 30))?.startsAt)
+        assertEquals("15:00:00", splitDay.currentOrNext(at("2026-08-17 14:30"), TODAY)?.startsAt)
     }
 
     /** After everything has finished, the day's last shift is still the day's shift. */
     @Test
     fun `after the last shift ends it is still the one reported`() {
-        assertEquals("15:00:00", splitDay.currentOrNext(todayAt(23, 45))?.startsAt)
+        assertEquals("15:00:00", splitDay.currentOrNext(at("2026-08-17 23:45"), TODAY)?.startsAt)
     }
 
     /** Before anything starts, the day's first shift is the one coming. */
     @Test
     fun `before the first shift starts it is the one reported`() {
-        assertEquals("06:00:00", splitDay.currentOrNext(todayAt(5))?.startsAt)
+        assertEquals("06:00:00", splitDay.currentOrNext(at("2026-08-17 05:00"), TODAY)?.startsAt)
+    }
+
+    // --- Shifts that run past midnight ---
+
+    /**
+     * The report this was written for.
+     *
+     * A guard rostered 23:00–07:00 on the 16th, opening the app at 00:30 on the 17th. The 17th is
+     * their day off — as it usually is for a night guard — and the old rule compared clock times
+     * with the date discarded, so at 00:30 the night shift matched nothing and the day off answered
+     * instead. Home said "not on duty" and the scanner offered nothing, mid-shift.
+     */
+    @Test
+    fun `a shift that began yesterday is the one being worked after midnight`() {
+        val duty = nightThenRest.currentOrNext(at("2026-08-17 00:30"), TODAY)
+
+        assertEquals(YESTERDAY, duty?.date)
+        assertEquals("23:00:00", duty?.startsAt)
+    }
+
+    @Test
+    fun `the night shift is still the answer one minute before it ends`() {
+        assertEquals(YESTERDAY, nightThenRest.currentOrNext(at("2026-08-17 06:59"), TODAY)?.date)
+    }
+
+    /** And it stops being the answer the moment it is over. The rollover, pinned to the minute. */
+    @Test
+    fun `once the night shift ends today answers instead`() {
+        assertEquals(TODAY, nightThenRest.currentOrNext(at("2026-08-17 07:01"), TODAY)?.date)
     }
 
     /**
-     * A night shift runs past midnight, so its end time is numerically before its start.
+     * Looking back at yesterday must not become yesterday answering forever.
      *
-     * Read literally that is a shift of negative length containing no instant at all, and a guard
-     * on nights would fall through to whatever else the day held.
+     * A finished shift can only ever win by covering the moment asked about. At ten the next
+     * morning the guard is on their day off, and the day off is the honest answer.
      */
     @Test
-    fun `a shift running through midnight is recognised as in progress`() {
-        val nights = listOf(shift(1, "22:00:00", "06:00:00"))
+    fun `yesterdays finished shift does not answer for today`() {
+        val yesterdaysDay = listOf(
+            shift(1, "06:00:00", "14:00:00", date = YESTERDAY),
+            shift(2, null, null, date = TODAY, dutyType = "OFF"),
+        )
 
-        assertEquals("22:00:00", nights.currentOrNext(todayAt(23, 30))?.startsAt)
+        assertEquals(TODAY, yesterdaysDay.currentOrNext(at("2026-08-17 10:00"), TODAY)?.date)
+    }
+
+    /** A night shift ending at 07:00 and a day shift starting at 07:00 both contain that instant. */
+    @Test
+    fun `at the boundary instant the shift beginning wins over the one ending`() {
+        val handover = listOf(
+            shift(1, "23:00:00", "07:00:00", date = YESTERDAY, dutyType = "RG"),
+            shift(2, "07:00:00", "15:00:00", date = TODAY),
+        )
+
+        assertEquals(TODAY, handover.currentOrNext(at("2026-08-17 07:00"), TODAY)?.date)
+    }
+
+    /** Nothing filed for today, and yesterday's shift long over. */
+    @Test
+    fun `yesterday alone reports nothing once its shift has ended`() {
+        val onlyYesterday = listOf(shift(1, "06:00:00", "14:00:00", date = YESTERDAY))
+
+        assertNull(onlyYesterday.currentOrNext(at("2026-08-17 10:00"), TODAY))
     }
 
     @Test
-    fun `a rest day reports nothing`() {
-        assertNull(emptyList<ScheduleEntity>().currentOrNext(todayAt(10)))
+    fun `a shift running through midnight is recognised before midnight too`() {
+        val nights = listOf(shift(1, "22:00:00", "06:00:00"))
+
+        assertEquals("22:00:00", nights.currentOrNext(at("2026-08-17 23:30"), TODAY)?.startsAt)
+    }
+
+    // --- Rest days and half-filled weeks ---
+
+    @Test
+    fun `an empty schedule reports nothing`() {
+        assertNull(emptyList<ScheduleEntity>().currentOrNext(at("2026-08-17 10:00"), TODAY))
+    }
+
+    /**
+     * A rest day is a duty, not the absence of one.
+     *
+     * The office files these deliberately. Reporting null would make a rest day indistinguishable
+     * from a week nobody filled in, and the guard could not tell which they were looking at.
+     */
+    @Test
+    fun `a rest day is reported as a duty`() {
+        val restDay = listOf(shift(1, null, null, dutyType = "OFF"))
+
+        assertEquals("Day Off", restDay.currentOrNext(at("2026-08-17 10:00"), TODAY)?.dutyName)
     }
 
     /** Hours the office left blank must not drop the duty — it is still a duty. */
@@ -93,7 +175,7 @@ class ScheduleSelectionTest {
     fun `a duty with no hours is still reported`() {
         val hoursMissing = listOf(shift(1, null, null))
 
-        assertEquals("Stationed Guard", hoursMissing.currentOrNext(todayAt(10))?.dutyName)
+        assertEquals("Stationed Guard", hoursMissing.currentOrNext(at("2026-08-17 10:00"), TODAY)?.dutyName)
     }
 
     /** A single shift is the answer whatever the hour, and must not be lost to the split-day rules. */
@@ -101,8 +183,19 @@ class ScheduleSelectionTest {
     fun `an ordinary single-shift day is unaffected`() {
         val ordinary = listOf(shift(1, "08:00:00", "17:00:00"))
 
-        assertEquals("08:00:00", ordinary.currentOrNext(todayAt(3))?.startsAt)
-        assertEquals("08:00:00", ordinary.currentOrNext(todayAt(12))?.startsAt)
-        assertEquals("08:00:00", ordinary.currentOrNext(todayAt(21))?.startsAt)
+        assertEquals("08:00:00", ordinary.currentOrNext(at("2026-08-17 03:00"), TODAY)?.startsAt)
+        assertEquals("08:00:00", ordinary.currentOrNext(at("2026-08-17 12:00"), TODAY)?.startsAt)
+        assertEquals("08:00:00", ordinary.currentOrNext(at("2026-08-17 21:00"), TODAY)?.startsAt)
+    }
+
+    private val nightThenRest
+        get() = listOf(
+            shift(1, "23:00:00", "07:00:00", date = YESTERDAY, dutyType = "RG"),
+            shift(2, null, null, date = TODAY, dutyType = "OFF"),
+        )
+
+    private companion object {
+        const val YESTERDAY = "2026-08-16"
+        const val TODAY = "2026-08-17"
     }
 }

@@ -117,13 +117,23 @@ data class AppSettings(
  */
 enum class AttendanceType { TIME_IN, TIME_OUT, CHECKPOINT }
 
-/** SG or RG. What the guard is rostered to do on a given day. */
+/** What the guard is scheduled to do on a given day. */
 enum class DutyType {
     /** One post for the shift: Time In and Time Out, at the checkpoint they scanned in at. */
     STATIONED,
 
     /** A round: Time In to start, a visit at each checkpoint, Time Out to end. */
     ROVING,
+
+    /**
+     * A rest day, and a real answer rather than the absence of one.
+     *
+     * The office files these explicitly — every guard not scheduled to work a day gets one. The app
+     * used to discard them, which left a rest day indistinguishable from a schedule nobody had
+     * filled in: both came out as "not on duty", and a guard could not tell whether they were off
+     * or whether the office had forgotten them.
+     */
+    OFF,
     ;
 
     companion object {
@@ -131,6 +141,7 @@ enum class DutyType {
         fun fromCode(code: String?): DutyType? = when (code?.uppercase()) {
             "SG" -> STATIONED
             "RG" -> ROVING
+            "OFF" -> OFF
             else -> null
         }
     }
@@ -164,7 +175,13 @@ data class DutyAssignment(
                 AttendanceType.CHECKPOINT,
                 AttendanceType.TIME_OUT,
             )
+            // Nothing is recorded against a rest day. Callers are expected to notice this before
+            // showing a card with no buttons on it.
+            DutyType.OFF -> emptyList()
         }
+
+    /** A day the guard is not working. Not the same as a day nobody scheduled. */
+    val isDayOff: Boolean get() = dutyType == DutyType.OFF
 }
 
 /**

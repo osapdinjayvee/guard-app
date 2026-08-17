@@ -117,16 +117,16 @@ fun ScheduleScreen(
             // going to arrive.
             !state.linked -> item {
                 Notice(
-                    "Your account is not on the duty roster",
-                    "Nobody has connected this login to a guard on the roster, so the app cannot " +
-                        "see what you are scheduled for. Ask the office to link your account.",
+                    "Your account is not linked to a guard",
+                    "Nobody has connected this login to a guard, so the app cannot see what you " +
+                        "are scheduled for. Ask the office to link your account.",
                 )
             }
 
             state.isEmpty -> item {
                 Notice(
                     "No shifts downloaded yet",
-                    "Open this screen while you have a connection and your roster will be saved " +
+                    "Open this screen while you have a connection and your schedule will be saved " +
                         "to this phone.",
                 )
             }
@@ -199,7 +199,13 @@ private fun DayRow(day: DutyAssignment, isToday: Boolean, onOpenRound: () -> Uni
                 val from = shiftTime(day.startsAt)
                 val to = shiftTime(day.endsAt)
                 Text(
-                    if (from != null && to != null) "$from – $to" else "Hours not set",
+                    when {
+                        // A rest day has no hours by design. "Hours not set" would read as an
+                        // omission by the office rather than as the day off it is.
+                        day.isDayOff -> "Day off"
+                        from != null && to != null -> "$from – $to"
+                        else -> "Hours not set"
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = if (from != null && to != null) {
@@ -210,7 +216,7 @@ private fun DayRow(day: DutyAssignment, isToday: Boolean, onOpenRound: () -> Uni
                 )
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // SG and RG are what the roster says and what the guards call each other.
+                    // SG and RG are what the schedule says and what the guards call each other.
                     DutyBadge(day.dutyType)
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -234,6 +240,8 @@ private fun DayRow(day: DutyAssignment, isToday: Boolean, onOpenRound: () -> Uni
                     "Time In and Time Out at one checkpoint — wherever you scan in, you scan out."
                 DutyType.ROVING ->
                     "Time In to start, a checkpoint scan at each post on your round, Time Out to end."
+                DutyType.OFF ->
+                    "A rest day. Nothing to record — no Time In, no Time Out, no round."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -299,24 +307,31 @@ private fun DateBlock(iso: String, isToday: Boolean) {
 
 @Composable
 private fun DutyBadge(type: DutyType) {
-    val stationed = type == DutyType.STATIONED
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = if (stationed) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.primaryContainer
-        },
-    ) {
+    // A rest day is drawn in the neutral colours rather than the brand ones: the week should show
+    // at a glance which days are worked, and a day off carrying the same weight as a shift defeats
+    // the only thing this column is for.
+    val label = when (type) {
+        DutyType.STATIONED -> "SG"
+        DutyType.ROVING -> "RG"
+        DutyType.OFF -> "OFF"
+    }
+    val container = when (type) {
+        DutyType.STATIONED -> MaterialTheme.colorScheme.primary
+        DutyType.ROVING -> MaterialTheme.colorScheme.primaryContainer
+        DutyType.OFF -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val content = when (type) {
+        DutyType.STATIONED -> MaterialTheme.colorScheme.onPrimary
+        DutyType.ROVING -> MaterialTheme.colorScheme.primary
+        DutyType.OFF -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(shape = RoundedCornerShape(8.dp), color = container) {
         Text(
-            if (stationed) "SG" else "RG",
+            label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = if (stationed) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.primary
-            },
+            color = content,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }

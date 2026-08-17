@@ -8,7 +8,11 @@ import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.domain.model.DutyType
+import com.minsu.guardapp.domain.model.AppSettings
+import com.minsu.guardapp.domain.model.ShiftWindow
+import com.minsu.guardapp.domain.model.attendanceWindow
 import com.minsu.guardapp.domain.model.roundPosts
+import com.minsu.guardapp.domain.model.shiftStart
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
@@ -90,12 +94,12 @@ class ScanViewModel @Inject constructor(
     private val _state = MutableStateFlow<ScanState>(ScanState.Scanning)
     val state: StateFlow<ScanState> = _state.asStateFlow()
 
-    /** Today's duty, for the banner above the viewfinder. */
+    /** The duty being worked, for the banner above the viewfinder. */
     private val _duty = MutableStateFlow<DutyAssignment?>(null)
     val duty: StateFlow<DutyAssignment?> = _duty.asStateFlow()
 
     init {
-        viewModelScope.launch { _duty.value = schedule.today() }
+        viewModelScope.launch { _duty.value = schedule.currentDuty() }
     }
 
     /**
@@ -126,23 +130,42 @@ class ScanViewModel @Inject constructor(
         }
     }
 
-    /** What the duty roster says about scanning *this* checkpoint, right now. */
+    /** What the guard's schedule says about scanning *this* checkpoint, right now. */
     private suspend fun rosterVerdict(checkpoint: Checkpoint): ScanState {
         if (!schedule.isLinked.first()) return ScanState.NotOnRoster
 
-        val duty = schedule.today() ?: return ScanState.NotScheduledToday
+        val duty = schedule.currentDuty() ?: return ScanState.NotScheduledToday
         _duty.value = duty
 
-        // The shift is already closed. A guard who has timed out is done for the day — offering Time
-        // Out again (or anything else) would let them re-open a finished shift. Checked before the
-        // wrong-post rule, because "your shift is over" is truer and kinder than "wrong post" to a
-        // guard who has clocked out and is scanning on their way past.
-        if (attendance.hasTimedOutToday()) return ScanState.ShiftComplete(checkpoint)
+        // A rest day the office filed deliberately, rather than a schedule nobody filled in. The
+        // guard is told the same thing either way — there is no shift to record against — but the
+        // app now knows the difference, and Home and My schedule say so.
+        if (duty.isDayOff) return ScanState.NotScheduledToday
+
+        val config = settings.current()
+
+        /*
+         * Everything below counts what has happened *during this shift*, so it needs the shift's
+         * span rather than the calendar day. A night guard's Time In at 23:05 and their Time Out at
+         * 06:55 belong to one shift and two dates; bounding by the day lost the first half of it at
+         * midnight, which offered them Time In a second time and forgot the post they opened at.
+         *
+         * Padded at the front by the same grace the office allows for clocking on early, or a Time
+         * In at 22:50 for a 23:00 shift falls outside its own shift's window.
+         */
+        val window = duty.attendanceWindow(clock.nowMillis())
+            .padded(beforeMinutes = config.timeInEarlyMinutes)
+
+        // The shift is already closed. A guard who has timed out is done — offering Time Out again
+        // (or anything else) would let them re-open a finished shift. Checked before the wrong-post
+        // rule, because "your shift is over" is truer and kinder than "wrong post" to a guard who
+        // has clocked out and is scanning on their way past.
+        if (attendance.hasTimedOutIn(window)) return ScanState.ShiftComplete(checkpoint)
 
         // A stationed guard's post is wherever they timed in. If they have not timed in yet, this
         // scan *is* the post — anything they scan is allowed, and it becomes the one they must
         // return to.
-        val post = schedule.postTimedInAtToday()
+        val post = schedule.postTimedInAt(window)
 
         if (duty.dutyType == DutyType.STATIONED &&
             post != null &&
@@ -152,7 +175,7 @@ class ScanViewModel @Inject constructor(
             return ScanState.WrongPost(scanned = checkpoint, timedInAt = timedInAt)
         }
 
-        return withTimeRules(checkpoint, duty)
+        return withTimeRules(checkpoint, duty, config, window, timedInPost = post)
     }
 
     /**
@@ -163,8 +186,13 @@ class ScanViewModel @Inject constructor(
      * from a rejection that lands after the shift has ended has already taken the selfie, walked
      * away, and can do nothing about it.
      */
-    private suspend fun withTimeRules(checkpoint: Checkpoint, duty: DutyAssignment): ScanState {
-        val config = settings.current()
+    private suspend fun withTimeRules(
+        checkpoint: Checkpoint,
+        duty: DutyAssignment,
+        config: AppSettings,
+        window: ShiftWindow,
+        timedInPost: Long?,
+    ): ScanState {
         val now = clock.nowMillis()
 
         var types = duty.allowedTypes
@@ -188,11 +216,11 @@ class ScanViewModel @Inject constructor(
                 "${config.timeInEarlyMinutes} minutes before your shift."
         }
 
-        // One Time In per shift. Once the guard has clocked on today, offering Time In again would
-        // let them open a second shift on top of the first — the "multiple time ins" a re-scan or a
+        // One Time In per shift. Once the guard has clocked on, offering Time In again would let
+        // them open a second shift on top of the first — the "multiple time ins" a re-scan or a
         // fumbled tap produces. It is removed rather than shown and refused, so what is left is Time
-        // Out (and, for a rover, checkpoint visits) — the only things that can still happen today.
-        val timedInToday = schedule.postTimedInAtToday() != null
+        // Out (and, for a rover, checkpoint visits) — the only things that can still happen.
+        val timedInToday = timedInPost != null
         if (timedInToday) {
             types = types - AttendanceType.TIME_IN
         }
@@ -213,7 +241,7 @@ class ScanViewModel @Inject constructor(
 
         // A patrol is movement. Scanning the same door twice in succession is a guard standing
         // still, and it must not be a way to satisfy the round without walking it.
-        if (attendance.lastVisitedCheckpointToday() == checkpoint.id) {
+        if (attendance.lastVisitedCheckpointIn(window) == checkpoint.id) {
             types = types - AttendanceType.CHECKPOINT
             notices += "You have just visited ${checkpoint.code}. Patrol another post before you " +
                 "scan this one again."
@@ -232,7 +260,7 @@ class ScanViewModel @Inject constructor(
         // apart or the app offers a Time Out the server then throws away.
         if (duty.dutyType == DutyType.ROVING && config.minVisitsPerCheckpoint > 0) {
             val required = config.minVisitsPerCheckpoint
-            val visits = attendance.checkpointVisitsToday()
+            val visits = attendance.checkpointVisitsIn(window)
             val posts = checkpoints.observeActive().first().roundPosts()
             val outstanding = posts.filter { (visits[it.id] ?: 0) < required }
 
@@ -270,24 +298,14 @@ class ScanViewModel @Inject constructor(
     }
 
     /**
-     * When the guard may first time in: the shift's start, less the grace window.
+     * When the guard may first time in: the shift's start, less the grace the office allows.
      *
-     * Null when the roster gives no start time, which means there is nothing to be early for and the
-     * rule cannot be applied — better to let the guard record their attendance than to block them on
-     * a roster the office left half-filled.
+     * Null when the schedule gives no start time, which means there is nothing to be early for and
+     * the rule cannot be applied — better to let the guard record their attendance than to block
+     * them on a schedule the office left half-filled.
      */
-    private fun shiftOpensAt(duty: DutyAssignment, earlyMinutes: Int): Long? {
-        val startsAt = duty.startsAt ?: return null
-
-        return runCatching {
-            val parsed = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-                .parse("${duty.date} ${startsAt.padTime()}")!!
-            parsed.time - earlyMinutes * 60_000L
-        }.getOrNull()
-    }
-
-    /** `23:00` and `23:00:00` both arrive from the roster; only one of them parses. */
-    private fun String.padTime(): String = if (length == 5) "$this:00" else this
+    private fun shiftOpensAt(duty: DutyAssignment, earlyMinutes: Int): Long? =
+        duty.shiftStart()?.minus(earlyMinutes * 60_000L)
 
     private fun clockTime(millis: Long): String =
         SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))

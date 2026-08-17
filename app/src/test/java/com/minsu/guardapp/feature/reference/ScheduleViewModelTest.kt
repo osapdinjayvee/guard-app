@@ -1,5 +1,6 @@
 package com.minsu.guardapp.feature.reference
 
+import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.domain.model.DutyAssignment
@@ -96,11 +97,11 @@ class ScheduleViewModelTest {
     )
 
     private class FakeSchedule(private val days: List<DutyAssignment>) : ScheduleRepository {
-        override fun observeToday(): Flow<DutyAssignment?> = MutableStateFlow(null)
+        override fun observeCurrentDuty(): Flow<DutyAssignment?> = MutableStateFlow(null)
         override fun observeAll(): Flow<List<DutyAssignment>> = MutableStateFlow(days)
-        override suspend fun today(): DutyAssignment? = null
+        override suspend fun currentDuty(): DutyAssignment? = null
         override val isLinked: Flow<Boolean> = MutableStateFlow(true)
-        override suspend fun postTimedInAtToday(): Long? = null
+        override suspend fun postTimedInAt(window: ShiftWindow): Long? = null
         override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 

@@ -24,6 +24,19 @@ interface ScheduleDao {
     @Query("SELECT * FROM schedule WHERE date = :date ORDER BY startsAt, id")
     suspend fun forDate(date: String): List<ScheduleEntity>
 
+    /**
+     * Yesterday and today, because a shift is not a day.
+     *
+     * A guard rostered 23:00–07:00 is still working at 00:30, and the entry that says so is filed
+     * against yesterday. Asking for today alone is what made the shift disappear at midnight.
+     * Ordered by date first so the caller's "last one filed today" fallback still means today's.
+     */
+    @Query("SELECT * FROM schedule WHERE date IN (:dates) ORDER BY date, startsAt, id")
+    fun observeForDates(dates: List<String>): Flow<List<ScheduleEntity>>
+
+    @Query("SELECT * FROM schedule WHERE date IN (:dates) ORDER BY date, startsAt, id")
+    suspend fun forDates(dates: List<String>): List<ScheduleEntity>
+
     @Query("SELECT * FROM schedule ORDER BY date, startsAt, id")
     fun observeAll(): Flow<List<ScheduleEntity>>
 

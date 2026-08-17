@@ -211,7 +211,9 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                     // guard can still walk to the right one — rather than by a rejection that lands
                     // after the shift is over.
                     is ScanState.WrongPost -> Result(
-                        title = "Not your post today",
+                        // Not "today": a stationed night shift opens on one date and closes on the
+                        // next, and the post it must close at belongs to the shift, not the day.
+                        title = "Not your post for this shift",
                         body = "You timed in at ${current.timedInAt}. A stationed shift ends where " +
                             "it began, so scan ${current.timedInAt} to time out — not " +
                             "${current.scanned.code}.",
@@ -223,8 +225,8 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                     // refusal, and it names when they can clock on again.
                     is ScanState.ShiftComplete -> Result(
                         title = "Shift complete",
-                        body = "You have already timed out today. Your shift is done — time in " +
-                            "again at the start of your next shift.",
+                        body = "You have already timed out. Your shift is done — time in again at " +
+                            "the start of your next shift.",
                         colour = SyncSynced,
                         onDismiss = viewModel::scanAgain,
                     )
@@ -232,18 +234,17 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
                     // A rest day is not an error, and is not worded as one.
                     ScanState.NotScheduledToday -> Result(
                         title = "No shift today",
-                        body = "You are not on the duty roster today, so there is no attendance to " +
-                            "record. If that looks wrong, check with the office.",
+                        body = "You are not scheduled for a shift today, so there is no attendance " +
+                            "to record. If that looks wrong, check with the office.",
                         colour = SyncPending,
                         onDismiss = viewModel::scanAgain,
                     )
 
                     // Not the guard's fault, and not something they can fix by scanning again.
                     ScanState.NotOnRoster -> Result(
-                        title = "Account not on the roster",
-                        body = "Your login has not been connected to a guard on the duty roster, so " +
-                            "the app cannot tell what you are scheduled for. Ask the office to link " +
-                            "your account.",
+                        title = "Account not linked to a guard",
+                        body = "Your login has not been connected to a guard, so the app cannot " +
+                            "tell what you are scheduled for. Ask the office to link your account.",
                         colour = SyncFailed,
                         onDismiss = viewModel::scanAgain,
                     )

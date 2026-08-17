@@ -1,6 +1,7 @@
 package com.minsu.guardapp.domain.repository
 
 import com.minsu.guardapp.core.network.ApiResult
+import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.domain.model.Announcement
 import com.minsu.guardapp.domain.model.AppSettings
 import com.minsu.guardapp.domain.model.AttendanceDraft
@@ -113,29 +114,37 @@ interface AttendanceRepository {
     /** Local records captured within [fromMillis, toMillis). The source for Reports. */
     fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>>
 
+    /*
+     * The three below take the shift they are asking about.
+     *
+     * They used to say `…Today` and mean it — bounded midnight to midnight — which is the bug that
+     * lost the first half of every night shift the moment the date rolled over. The name is part of
+     * the fix: "today" was the lie, and leaving it would invite the next person to reintroduce it.
+     */
+
     /**
-     * Visits per checkpoint today, from this device, keyed by checkpoint id.
+     * Visits per checkpoint during [window], from this device, keyed by checkpoint id.
      *
      * A post the guard has not reached is simply absent from the map. Decides whether the round is
      * walked, and the rule is two visits to each post rather than two scans anywhere.
      */
-    suspend fun checkpointVisitsToday(): Map<Long, Int>
+    suspend fun checkpointVisitsIn(window: ShiftWindow): Map<Long, Int>
 
     /**
-     * The post this guard visited most recently today, or null if they have not visited one.
+     * The post this guard visited most recently in [window], or null if they have not visited one.
      *
      * Two visits to the same post back to back are not a patrol — they are a guard standing at one
      * door scanning it twice. The round requires them to go somewhere else in between.
      */
-    suspend fun lastVisitedCheckpointToday(): Long?
+    suspend fun lastVisitedCheckpointIn(window: ShiftWindow): Long?
 
     /**
-     * Whether the guard has already timed out today — i.e. the shift is closed.
+     * Whether the guard has already closed this shift.
      *
      * Once true, scanning offers nothing: the shift is done, and Time In returns only with the next
      * one. Read locally so it holds without a signal.
      */
-    suspend fun hasTimedOutToday(): Boolean
+    suspend fun hasTimedOutIn(window: ShiftWindow): Boolean
 
     /**
      * Commits a captured attendance record to the local database, then requests a sync. The
@@ -179,24 +188,30 @@ interface AuthRepository {
  * or roving *before* it can offer them the right buttons — and it needs to know that in a basement.
  */
 interface ScheduleRepository {
-    /** Today's duty. Null on a rest day, or a week the office has not filled in. */
-    fun observeToday(): Flow<DutyAssignment?>
+    /**
+     * The duty that applies right now. Null when the office has filed nothing for today.
+     *
+     * Not "today's duty": a shift that began yesterday and runs past midnight is still the one
+     * being worked, and is what this answers until it ends. A rest day is a duty like any other —
+     * [DutyType.OFF] — and is distinct from null, which means nobody scheduled anything.
+     */
+    fun observeCurrentDuty(): Flow<DutyAssignment?>
 
-    /** Every rostered day the phone knows about, in order. What the guard is shown. */
+    /** Every scheduled day the phone knows about, in order. What the guard is shown. */
     fun observeAll(): Flow<List<DutyAssignment>>
 
-    suspend fun today(): DutyAssignment?
+    suspend fun currentDuty(): DutyAssignment?
 
-    /** False when nobody has joined this login to a guard on the roster. Not the same as "no shift". */
+    /** False when nobody has joined this login to a guard. Not the same as "no shift". */
     val isLinked: Flow<Boolean>
 
     /**
-     * The checkpoint this guard timed in at today, if they have.
+     * The checkpoint this guard opened the current shift at, if they have.
      *
-     * A stationed guard's post. Nobody assigns it — the first Time In of the day defines it, and the
-     * shift must end where it began.
+     * A stationed guard's post. Nobody assigns it — the first Time In of the shift defines it, and
+     * the shift must end where it began.
      */
-    suspend fun postTimedInAtToday(): Long?
+    suspend fun postTimedInAt(window: ShiftWindow): Long?
 
     suspend fun refresh(): ApiResult<Unit>
 }

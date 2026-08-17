@@ -247,12 +247,16 @@ private fun ConnectivityPill(isOnline: Boolean) {
 private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
     GuardCard(modifier = Modifier.clickable(onClick = onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // A rest day is styled like no-duty rather than like a shift: nothing is expected of the
+            // guard today, and colouring it as active work would say otherwise at a glance.
+            val working = duty != null && !duty.isDayOff
+
             Surface(
                 shape = CircleShape,
-                color = if (duty == null) {
-                    MaterialTheme.colorScheme.surfaceVariant
-                } else {
+                color = if (working) {
                     MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
                 },
             ) {
                 Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
@@ -260,14 +264,15 @@ private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
                         when (duty?.dutyType) {
                             DutyType.STATIONED -> "SG"
                             DutyType.ROVING -> "RG"
+                            DutyType.OFF -> "OFF"
                             null -> "—"
                         },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (duty == null) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
+                        color = if (working) {
                             MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     )
                 }
@@ -276,8 +281,13 @@ private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 // The day, then the hours, then everything else. A guard glancing at Home before a
                 // shift is asking "when am I on" — so that is the line set in the largest type.
+                // A shift that began yesterday is still the one being worked, so the heading has to
+                // say which day it belongs to. "TODAY" over a 23:00–07:00 shift, read at 00:30, is
+                // a small lie that makes the hours underneath look wrong.
+                val carriedOver = duty != null && !duty.isDayOff && duty.date != todayIso()
+
                 Text(
-                    "TODAY · ${today()}",
+                    if (carriedOver) "SHIFT FROM ${duty!!.date.asDayLabel()}" else "TODAY · ${today()}",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -288,20 +298,23 @@ private fun TodayDutyCard(duty: DutyAssignment?, onOpen: () -> Unit) {
                 Text(
                     when {
                         duty == null -> "Not on duty"
+                        duty.isDayOff -> "Day off"
                         from != null && to != null -> "$from – $to"
                         else -> "Hours not set"
                     },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (duty == null) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
+                    color = if (working) {
                         MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
                 Text(
-                    when (duty) {
-                        null -> "You are not rostered for a shift today"
+                    when {
+                        duty == null -> "No shift scheduled for today"
+                        duty.isDayOff -> "Rest day · tap to see the week"
+                        carriedOver -> "${duty.dutyName ?: duty.dutyType.name} · in progress"
                         else -> "${duty.dutyName ?: duty.dutyType.name} · tap to see the week"
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -391,6 +404,15 @@ private fun RemainingStopsCard(stops: List<Stop>, onOpenStop: (Stop) -> Unit) {
 /** `Mon, 13 Jul` — today, as a guard would say it. */
 private fun today(): String =
     SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date())
+
+private fun todayIso(): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+/** `2026-08-16` as `Sun, 16 Aug`. The date is left alone if it will not parse. */
+private fun String.asDayLabel(): String = runCatching {
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(this)!!
+        .let { SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(it) }
+}.getOrDefault(this)
 
 private data class Action(val icon: Int, val label: String, val destination: HomeAction)
 

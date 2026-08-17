@@ -9,6 +9,7 @@ import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
 import com.minsu.guardapp.core.network.map
 import com.minsu.guardapp.core.security.RosterPreferences
+import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.repository.ProfileRepository
@@ -34,11 +35,14 @@ class DefaultScheduleRepository @Inject constructor(
     private val clock: Clock,
 ) : ScheduleRepository {
 
-    override fun observeToday(): Flow<DutyAssignment?> =
-        dao.observeForDate(todayDate()).map { rows -> rows.currentOrNext(clock.nowMillis()) }
+    override fun observeCurrentDuty(): Flow<DutyAssignment?> =
+        dao.observeForDates(dates()).map { rows -> rows.currentOrNext(clock.nowMillis(), todayDate()) }
 
-    override suspend fun today(): DutyAssignment? =
-        dao.forDate(todayDate()).currentOrNext(clock.nowMillis())
+    override suspend fun currentDuty(): DutyAssignment? =
+        dao.forDates(dates()).currentOrNext(clock.nowMillis(), todayDate())
+
+    /** Yesterday and today: the only two dates an entry covering *now* can be filed against. */
+    private fun dates(): List<String> = listOf(yesterdayDate(), todayDate())
 
     override fun observeAll(): Flow<List<DutyAssignment>> =
         dao.observeAll().map { rows -> rows.mapNotNull { it.toDomain() } }
@@ -85,43 +89,34 @@ class DefaultScheduleRepository @Inject constructor(
             .map { }
 
     /**
-     * The checkpoint this guard timed in at today, if they have — read from the local database, so
-     * it holds with no signal.
+     * The checkpoint this guard opened the shift at, if they have — read from the local database,
+     * so it holds with no signal.
      *
-     * This is a stationed guard's post. Nobody assigns it; the first Time In of the day defines it,
-     * and the app refuses to let them close the shift anywhere else.
+     * This is a stationed guard's post. Nobody assigns it; the first Time In of the *shift* defines
+     * it, and the app refuses to let them close the shift anywhere else. Bounded by the shift and
+     * not the day, or a night guard's post is forgotten the moment the date rolls over.
      */
-    override suspend fun postTimedInAtToday(): Long? {
-        val (from, to) = todayBounds()
+    override suspend fun postTimedInAt(window: ShiftWindow): Long? {
         // This guard's own Time In. The handset may still hold the last guard's, and treating theirs
         // as this one's would pin a stationed guard to a post they never stood at.
         val userId = profiles.observe().first()?.id ?: return null
 
-        return attendance.firstTimeInBetween(userId, from, to)?.checkpointId
+        return attendance.firstTimeInBetween(userId, window.start, window.end)?.checkpointId
     }
 
-    private fun todayDate(): String =
-        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clock.nowMillis()))
+    private fun todayDate(): String = clock.nowMillis().asDate()
 
-    /**
-     * Midnight to midnight in the *guard's* timezone, not UTC's.
-     *
-     * A 23:50 Time In belongs to the day the guard thinks it is. Bounding the day in UTC would put
-     * a late-evening capture in Manila into tomorrow, and the shift would appear to have no Time In
-     * at all.
-     */
-    private fun todayBounds(): Pair<Long, Long> {
-        val start = Calendar.getInstance().apply {
+    /** The date in the *guard's* timezone. A 23:50 capture belongs to the day they think it is. */
+    private fun yesterdayDate(): String = Calendar.getInstance()
+        .apply {
             timeInMillis = clock.nowMillis()
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+            add(Calendar.DAY_OF_MONTH, -1)
         }
-        val from = start.timeInMillis
-        start.add(Calendar.DAY_OF_MONTH, 1)
-        return from to start.timeInMillis
-    }
+        .timeInMillis
+        .asDate()
+
+    private fun Long.asDate(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(this))
 }
 
 internal fun ScheduleEntity.toDomain(): DutyAssignment? {

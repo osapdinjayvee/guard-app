@@ -1,5 +1,6 @@
 package com.minsu.guardapp.feature.scan
 
+import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.domain.model.SyncOutcome
@@ -66,11 +67,11 @@ class ScanViewModelTest {
         private val linked: Boolean = true,
         private val timedInAt: Long? = null,
     ) : ScheduleRepository {
-        override fun observeToday(): Flow<DutyAssignment?> = MutableStateFlow(duty)
+        override fun observeCurrentDuty(): Flow<DutyAssignment?> = MutableStateFlow(duty)
         override fun observeAll(): Flow<List<DutyAssignment>> = MutableStateFlow(listOfNotNull(duty))
-        override suspend fun today(): DutyAssignment? = duty
+        override suspend fun currentDuty(): DutyAssignment? = duty
         override val isLinked: Flow<Boolean> = MutableStateFlow(linked)
-        override suspend fun postTimedInAtToday(): Long? = timedInAt
+        override suspend fun postTimedInAt(window: ShiftWindow): Long? = timedInAt
         override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 
@@ -361,10 +362,11 @@ class ScanViewModelTest {
         timedOut: Boolean = false,
         settings: AppSettings = AppSettings(),
         nowMillis: Long = NOON,
+        attendance: FakeAttendance = FakeAttendance(visits, lastVisited, timedOut),
     ) = ScanViewModel(
         checkpoints = checkpoints,
         schedule = schedule,
-        attendance = FakeAttendance(visits, lastVisited, timedOut),
+        attendance = attendance,
         settings = FakeSettings(settings),
         clock = Clock { nowMillis },
     )
@@ -374,6 +376,15 @@ class ScanViewModelTest {
         private val lastVisited: Long? = null,
         private val timedOut: Boolean = false,
     ) : AttendanceRepository {
+        /**
+         * The span the view model asked about.
+         *
+         * Recorded rather than ignored because the window *is* the fix: a fake that answers the
+         * same whatever it is handed cannot tell a shift-bounded question from a day-bounded one,
+         * which is exactly the distinction that broke every night shift at midnight.
+         */
+        var askedWindow: ShiftWindow? = null
+            private set
         override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeOtherAccountUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
         override fun observeHistory(limit: Int): Flow<List<AttendanceRecord>> = MutableStateFlow(emptyList())
@@ -385,9 +396,12 @@ class ScanViewModelTest {
         override suspend fun syncNow(): SyncOutcome = SyncOutcome()
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
             MutableStateFlow(emptyList())
-        override suspend fun checkpointVisitsToday(): Map<Long, Int> = visits
-        override suspend fun lastVisitedCheckpointToday(): Long? = lastVisited
-        override suspend fun hasTimedOutToday(): Boolean = timedOut
+        override suspend fun checkpointVisitsIn(window: ShiftWindow): Map<Long, Int> =
+            visits.also { askedWindow = window }
+        override suspend fun lastVisitedCheckpointIn(window: ShiftWindow): Long? =
+            lastVisited.also { askedWindow = window }
+        override suspend fun hasTimedOutIn(window: ShiftWindow): Boolean =
+            timedOut.also { askedWindow = window }
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
         override suspend fun refreshHistory(): ApiResult<Int> = ApiResult.Success(0)
     }
@@ -492,6 +506,43 @@ class ScanViewModelTest {
         assertTrue(AttendanceType.TIME_OUT in state.allowedTypes)
     }
 
+    // --- Shifts that run past midnight ---
+
+    /**
+     * Half past midnight, half way through a 23:00–07:00 shift that began yesterday.
+     *
+     * The whole reason the window exists. Every one of these questions used to be asked about the
+     * calendar day, so at 00:00 the guard's own Time In fell out of view: the app offered Time In a
+     * second time, hid the Time Out they were standing there to record, forgot the post a stationed
+     * guard had opened at, and reset a rover's round to zero mid-round.
+     */
+    @Test
+    fun `a shift that began yesterday keeps its time in after midnight`() = runTest {
+        val attendance = FakeAttendance(visits = emptyMap())
+        val vm = scanner(
+            schedule = nightShift(timedInAt = gateA.id),
+            checkpoints = FakeCheckpoints(
+                resolutions = mapOf("GATE-A" to CheckpointResolution.Resolved(gateA)),
+                active = listOf(gateA, clinic),
+            ),
+            nowMillis = at("2026-07-13 00:30"),
+            attendance = attendance,
+        )
+
+        vm.onCodeScanned("GATE-A")
+
+        val state = vm.state.value as ScanState.ChoosingType
+        assertFalse("a second Time In would open a second shift", AttendanceType.TIME_IN in state.allowedTypes)
+        assertTrue("the guard is standing there to close the shift", AttendanceType.TIME_OUT in state.allowedTypes)
+
+        // And the span asked about reaches back across midnight to the shift's own start, so the
+        // 23:05 Time In and every visit walked before midnight are still in view.
+        val window = attendance.askedWindow!!
+        assertTrue("the shift's own Time In must be inside it", at("2026-07-12 23:05") in window)
+        assertTrue("as must a visit walked before midnight", at("2026-07-12 23:50") in window)
+        assertTrue("and the moment being asked about", at("2026-07-13 00:30") in window)
+    }
+
     /** Turning up an hour early and timing in does not make the shift an hour longer. */
     @Test
     fun `time in is not offered before the shift opens`() = runTest {
@@ -541,6 +592,19 @@ class ScanViewModelTest {
         // expected. What must be absent is any complaint about being *early*.
         assertFalse(state.notice!!.contains("Time In opens"))
     }
+
+    /** A roving night shift filed against yesterday, which is where a 23:00–07:00 duty lives. */
+    private fun nightShift(timedInAt: Long?) = FakeRoster(
+        duty = DutyAssignment(
+            date = "2026-07-12",
+            dutyType = DutyType.ROVING,
+            dutyName = "Roving Guard",
+            startsAt = "23:00:00",
+            endsAt = "07:00:00",
+            totalHours = 8f,
+        ),
+        timedInAt = timedInAt,
+    )
 
     private fun rosterStartingAt(startsAt: String) = FakeRoster(
         duty = DutyAssignment(

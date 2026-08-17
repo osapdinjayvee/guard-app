@@ -33,6 +33,7 @@ class DataStoreSettingsCache @Inject constructor(
             imageQuality = prefs[QUALITY] ?: defaults.imageQuality,
             imageMaxDimensionPx = prefs[MAX_DIMENSION] ?: defaults.imageMaxDimensionPx,
             timeInEarlyMinutes = prefs[EARLY_MINUTES] ?: defaults.timeInEarlyMinutes,
+            shiftCloseGraceMinutes = prefs[CLOSE_GRACE] ?: defaults.shiftCloseGraceMinutes,
             minVisitsPerCheckpoint = prefs[MIN_VISITS] ?: defaults.minVisitsPerCheckpoint,
             maintenanceMessage = prefs[MAINTENANCE],
         )
@@ -46,6 +47,7 @@ class DataStoreSettingsCache @Inject constructor(
             prefs[QUALITY] = settings.imageQuality
             prefs[MAX_DIMENSION] = settings.imageMaxDimensionPx
             prefs[EARLY_MINUTES] = settings.timeInEarlyMinutes
+            prefs[CLOSE_GRACE] = settings.shiftCloseGraceMinutes
             prefs[MIN_VISITS] = settings.minVisitsPerCheckpoint
             settings.maintenanceMessage
                 ?.let { prefs[MAINTENANCE] = it }
@@ -60,6 +62,7 @@ class DataStoreSettingsCache @Inject constructor(
         val QUALITY = intPreferencesKey("image_quality")
         val MAX_DIMENSION = intPreferencesKey("image_max_dimension_px")
         val EARLY_MINUTES = intPreferencesKey("time_in_early_minutes")
+        val CLOSE_GRACE = intPreferencesKey("shift_close_grace_minutes")
         val MIN_VISITS = intPreferencesKey("min_visits_per_checkpoint")
         val MAINTENANCE = stringPreferencesKey("maintenance_message")
     }

@@ -102,10 +102,67 @@ class ScheduleSelectionTest {
         assertEquals(YESTERDAY, nightThenRest.currentOrNext(at("2026-08-17 06:59"), TODAY)?.date)
     }
 
-    /** And it stops being the answer the moment it is over. The rollover, pinned to the minute. */
+    /** With no grace configured, it stops being the answer the moment it is over. */
     @Test
     fun `once the night shift ends today answers instead`() {
         assertEquals(TODAY, nightThenRest.currentOrNext(at("2026-08-17 07:01"), TODAY)?.date)
+    }
+
+    // --- The walk back to the guard house ---
+
+    /**
+     * A guard does not stop working at the instant the roster says.
+     *
+     * They hand over, wait for their relief, walk in from the far end of the campus. A Time Out at
+     * 07:20 on a shift that ended at 07:00 is closing *that* shift — and without the grace it
+     * resolved to the day off instead and the record was refused. The midnight fix alone just moved
+     * the same failure twenty minutes later.
+     */
+    @Test
+    fun `a shift just ended is still the one being closed`() {
+        val duty = nightThenRest.currentOrNext(at("2026-08-17 07:20"), TODAY, closeGraceMinutes = 120)
+
+        assertEquals(YESTERDAY, duty?.date)
+    }
+
+    /** The grace is not indefinite. Past it, the day off is the honest answer. */
+    @Test
+    fun `the grace runs out`() {
+        val duty = nightThenRest.currentOrNext(at("2026-08-17 11:00"), TODAY, closeGraceMinutes = 120)
+
+        assertEquals(TODAY, duty?.date)
+    }
+
+    /**
+     * A shift about to start also beats one still inside its grace.
+     *
+     * At 14:30 on a split day the morning ended at 14:00 and the afternoon starts at 15:00. The
+     * useful answer is the shift they are about to work — a rule this app already had, which adding
+     * the grace quietly overturned until the order was fixed.
+     */
+    @Test
+    fun `the shift about to start wins over one still in its grace`() {
+        val duty = splitDay.currentOrNext(at("2026-08-17 14:30"), TODAY, closeGraceMinutes = 120)
+
+        assertEquals("15:00:00", duty?.startsAt)
+    }
+
+    /**
+     * A shift that has genuinely started beats one still inside its grace.
+     *
+     * At 07:10 the night shift's grace is running and the morning shift has begun. Handing back the
+     * one that just ended would judge the new shift's Time In against last night's schedule.
+     */
+    @Test
+    fun `a shift that has started wins over one still in its grace`() {
+        val handover = listOf(
+            shift(1, "23:00:00", "07:00:00", date = YESTERDAY, dutyType = "RG"),
+            shift(2, "07:00:00", "15:00:00", date = TODAY),
+        )
+
+        val duty = handover.currentOrNext(at("2026-08-17 07:10"), TODAY, closeGraceMinutes = 120)
+
+        assertEquals(TODAY, duty?.date)
     }
 
     /**

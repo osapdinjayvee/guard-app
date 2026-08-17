@@ -28,7 +28,11 @@ import com.minsu.guardapp.domain.model.shiftWindow
  *   covering [nowMillis] — never as "the next one" or "the last one", or a night shift that ended
  *   at 07:00 would still be the answer at ten the same morning.
  */
-internal fun List<ScheduleEntity>.currentOrNext(nowMillis: Long, today: String): DutyAssignment? {
+internal fun List<ScheduleEntity>.currentOrNext(
+    nowMillis: Long,
+    today: String,
+    closeGraceMinutes: Int = 0,
+): DutyAssignment? {
     if (isEmpty()) return null
 
     val duties = mapNotNull { it.toDomain() }
@@ -37,17 +41,42 @@ internal fun List<ScheduleEntity>.currentOrNext(nowMillis: Long, today: String):
     // inclusive end meets a morning shift's inclusive start at exactly 07:00 — belongs to the shift
     // beginning rather than the one ending.
     val (todays, others) = duties.partition { it.date == today }
+    val ordered = todays + others
 
-    (todays + others)
+    ordered
         .firstOrNull { duty -> duty.shiftWindow()?.contains(nowMillis) == true }
         ?.let { return it }
-
-    if (todays.isEmpty()) return null
 
     todays
         .filter { (it.shiftWindow()?.start ?: Long.MIN_VALUE) > nowMillis }
         .minByOrNull { it.shiftWindow()?.start ?: Long.MAX_VALUE }
         ?.let { return it }
+
+    /*
+     * Then the shift that has just ended, within the grace the office allows.
+     *
+     * A guard does not stop working when the roster says: they hand over, wait for their relief,
+     * and walk back from the far end of the campus. A Time Out at 07:20 on a shift that ended at
+     * 07:00 is closing that shift — but without this it resolved to the next entry, which for a
+     * night guard is usually the day off, and the record was refused.
+     *
+     * Ordered *after* both tests above, and that ordering is the whole subtlety. A shift genuinely
+     * running always wins, or the guard opening the 07:00 morning shift would be handed the
+     * 23:00–07:00 that has just finished. And a shift about to start wins too: at 14:30, between a
+     * morning that ended at 14:00 and an afternoon starting at 15:00, the useful answer is the one
+     * they are about to work — which is the rule this app already had, and the grace must not
+     * quietly overturn it.
+     */
+    if (closeGraceMinutes > 0) {
+        ordered
+            .firstOrNull { duty ->
+                duty.shiftWindow()?.padded(beforeMinutes = 0, afterMinutes = closeGraceMinutes)
+                    ?.contains(nowMillis) == true
+            }
+            ?.let { return it }
+    }
+
+    if (todays.isEmpty()) return null
 
     // Entries the office filed without hours cannot be placed in the day, but they are still
     // duties — a rest day is filed in exactly that shape. Falling back to the last one keeps them

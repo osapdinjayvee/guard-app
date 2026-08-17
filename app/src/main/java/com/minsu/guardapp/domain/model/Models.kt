@@ -104,6 +104,14 @@ data class AppSettings(
     val imageMaxDimensionPx: Int = 1600,
     /** How early a guard may open a shift. Only earliness is capped; a late Time In still records. */
     val timeInEarlyMinutes: Int = 15,
+    /**
+     * How long after a shift ends it is still that shift being closed.
+     *
+     * A guard does not stop working at the instant the roster says: they hand over, wait for their
+     * relief, walk back from the far end of the campus. Without this the Time Out is judged against
+     * whatever comes next — for a night guard, usually a day off — and refused.
+     */
+    val shiftCloseGraceMinutes: Int = 120,
     /** Visits *each* post must receive before a roving guard can close the shift. Two full sweeps. */
     val minVisitsPerCheckpoint: Int = 2,
     val maintenanceMessage: String? = null,

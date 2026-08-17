@@ -14,7 +14,9 @@ import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.repository.ProfileRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
+import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.text.SimpleDateFormat
@@ -32,14 +34,23 @@ class DefaultScheduleRepository @Inject constructor(
     private val profiles: ProfileRepository,
     private val api: GuardApi,
     private val errors: ApiErrorMapper,
+    private val settings: SettingsRepository,
     private val clock: Clock,
 ) : ScheduleRepository {
 
+    /**
+     * The grace comes from the server's settings, so the app and the server agree about when a
+     * shift stops being closeable. If they disagree the app offers a Time Out the server refuses,
+     * which is the worst place for the two to differ.
+     */
     override fun observeCurrentDuty(): Flow<DutyAssignment?> =
-        dao.observeForDates(dates()).map { rows -> rows.currentOrNext(clock.nowMillis(), todayDate()) }
+        combine(dao.observeForDates(dates()), settings.observe()) { rows, config ->
+            rows.currentOrNext(clock.nowMillis(), todayDate(), config.shiftCloseGraceMinutes)
+        }
 
     override suspend fun currentDuty(): DutyAssignment? =
-        dao.forDates(dates()).currentOrNext(clock.nowMillis(), todayDate())
+        dao.forDates(dates())
+            .currentOrNext(clock.nowMillis(), todayDate(), settings.current().shiftCloseGraceMinutes)
 
     /** Yesterday and today: the only two dates an entry covering *now* can be filed against. */
     private fun dates(): List<String> = listOf(yesterdayDate(), todayDate())

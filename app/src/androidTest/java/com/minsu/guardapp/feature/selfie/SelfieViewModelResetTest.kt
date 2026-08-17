@@ -2,6 +2,7 @@ package com.minsu.guardapp.feature.selfie
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.core.camera.SelfieCapture
 import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.core.location.LocationFix
@@ -167,9 +168,9 @@ class SelfieViewModelResetTest {
         override suspend fun syncNow(): SyncOutcome = SyncOutcome()
         override fun observeInRange(fromMillis: Long, toMillis: Long): Flow<List<AttendanceRecord>> =
             MutableStateFlow(emptyList())
-        override suspend fun checkpointVisitsToday(): Map<Long, Int> = emptyMap()
-        override suspend fun lastVisitedCheckpointToday(): Long? = null
-        override suspend fun hasTimedOutToday(): Boolean = false
+        override suspend fun checkpointVisitsIn(window: ShiftWindow): Map<Long, Int> = emptyMap()
+        override suspend fun lastVisitedCheckpointIn(window: ShiftWindow): Long? = null
+        override suspend fun hasTimedOutIn(window: ShiftWindow): Boolean = false
         override suspend fun submit(id: String, draft: AttendanceDraft) = Unit
         override suspend fun refreshHistory(): ApiResult<Int> = ApiResult.Success(0)
     }

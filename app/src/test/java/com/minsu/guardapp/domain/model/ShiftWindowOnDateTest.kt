@@ -153,4 +153,71 @@ class ShiftWindowOnDateTest {
         assertTrue(at("2026-08-20 06:30") in window)
         assertTrue(at("2026-08-20 07:00") !in window)
     }
+
+    /*
+     * What a round is answerable for, which is not the same as its shift window.
+     *
+     * Both cases below are real rows from the roster. Bounded by the window alone, each is a scan
+     * a guard made that appears on no round at all — which is worse than appearing on the wrong
+     * one, because there is nowhere left to go and look for it.
+     */
+
+    private fun bounds(duties: List<DutyAssignment>, date: String) =
+        duties.roundBoundsOn(date = date, earlyMinutes = 15, graceMinutes = 120)
+
+    /**
+     * Guard 9, 4 August: rostered 08:00–17:00 and clocked on at 07:37.
+     *
+     * Twenty-three minutes early against a margin of fifteen. Outside the shift, plainly theirs,
+     * and on no other shift's claim — so it stays on the day it happened.
+     */
+    @Test
+    fun `a time in too early for its own margin stays on its day`() {
+        val duties = listOf(shift("2026-08-04", "08:00", "17:00"))
+
+        assertTrue(bounds(duties, "2026-08-04").claims(at("2026-08-04 07:37")))
+    }
+
+    /**
+     * Guard 5, 17 August: a Time Out at 07:16 against a 14:00–22:00 shift.
+     *
+     * Seven hours before its own shift begins and eight after the previous one closed. It matches
+     * nothing, which is exactly why it must not be swallowed — a record the roster cannot explain
+     * is one somebody needs to see.
+     */
+    @Test
+    fun `a record no shift can explain stays on its day`() {
+        val duties = listOf(
+            shift("2026-08-16", "15:00", "23:00"),
+            shift("2026-08-17", "14:00", "22:00"),
+        )
+
+        assertTrue(bounds(duties, "2026-08-17").claims(at("2026-08-17 07:16")))
+    }
+
+    /**
+     * And the fallback must not undo the fix.
+     *
+     * Guard 8's 07:05 Time Out on the 20th falls on the 20th's calendar day, but the night shift
+     * that started on the 19th has the better claim — so the 20th does not take it back.
+     */
+    @Test
+    fun `the day fallback yields to another shift's claim`() {
+        val duties = listOf(
+            shift("2026-08-19", "23:00", "07:00"),
+            shift("2026-08-20", "22:00", "06:00"),
+        )
+
+        assertTrue(bounds(duties, "2026-08-19").claims(at("2026-08-20 07:05")))
+        assertTrue(!bounds(duties, "2026-08-20").claims(at("2026-08-20 07:05")))
+    }
+
+    /** The span asked of the database has to hold both readings, or the filter never sees them. */
+    @Test
+    fun `the query span covers the shift and the day`() {
+        val query = bounds(nightThenAfternoon, "2026-08-20").query
+
+        assertTrue(at("2026-08-20 00:30") in query)
+        assertTrue(at("2026-08-20 23:30") in query)
+    }
 }

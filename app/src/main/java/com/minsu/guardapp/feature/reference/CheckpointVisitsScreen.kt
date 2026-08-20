@@ -38,7 +38,7 @@ import com.minsu.guardapp.core.media.SelfieStore
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.SyncState
-import com.minsu.guardapp.domain.model.attendanceWindowOn
+import com.minsu.guardapp.domain.model.roundBoundsOn
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
@@ -85,14 +85,17 @@ class CheckpointVisitsViewModel @AssistedInject constructor(
         // this screen is opened from uses, so the count there and the photographs here cannot
         // disagree about which visits belong to the night the guard actually worked.
         combine(schedule.observeAll(), settings.observe()) { duties, config ->
-            duties.attendanceWindowOn(
+            duties.roundBoundsOn(
                 date = date,
                 earlyMinutes = config.timeInEarlyMinutes,
                 graceMinutes = config.shiftCloseGraceMinutes,
             )
         }
-            .distinctUntilChanged()
-            .flatMapLatest { window -> attendance.observeInRange(window.start, window.end + 1) }
+            .distinctUntilChanged { a, b -> a.query == b.query }
+            .flatMapLatest { bounds ->
+                attendance.observeInRange(bounds.query.start, bounds.query.end + 1)
+                    .map { records -> records.filter { bounds.claims(it.capturedAt) } }
+            }
             .map { records ->
                 records
                     .filter {

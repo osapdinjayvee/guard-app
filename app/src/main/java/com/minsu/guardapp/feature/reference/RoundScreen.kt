@@ -39,7 +39,7 @@ import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.roundPosts
-import com.minsu.guardapp.domain.model.attendanceWindowOn
+import com.minsu.guardapp.domain.model.roundBoundsOn
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
 import com.minsu.guardapp.domain.repository.ScheduleRepository
@@ -151,21 +151,23 @@ class RoundViewModel @Inject constructor(
      */
     val uiState: StateFlow<RoundUiState> =
         combine(schedule.observeAll(), settings.observe()) { duties, config ->
-            duties.attendanceWindowOn(
+            duties.roundBoundsOn(
                 date = date,
                 earlyMinutes = config.timeInEarlyMinutes,
                 graceMinutes = config.shiftCloseGraceMinutes,
             ) to config.minVisitsPerCheckpoint
         }
-            .distinctUntilChanged()
-            .flatMapLatest { (window, required) ->
+            .distinctUntilChanged { (a, _), (b, _) -> a.query == b.query }
+            .flatMapLatest { (bounds, required) ->
                 combine(
                     checkpoints.observeActive(),
                     // `end + 1` because the query's upper bound is exclusive while a window's is
                     // not: a Time Out landing exactly on the last millisecond of its own shift
                     // would otherwise be the one record the round could not see.
-                    attendance.observeInRange(window.start, window.end + 1),
-                ) { posts, records ->
+                    attendance.observeInRange(bounds.query.start, bounds.query.end + 1),
+                ) { posts, all ->
+                    val records = all.filter { bounds.claims(it.capturedAt) }
+
                     RoundUiState(
                         date = date,
                         stops = buildStops(posts.roundPosts(), records, required),

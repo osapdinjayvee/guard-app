@@ -90,8 +90,8 @@ fun List<DutyAssignment>.windowOn(date: String): ShiftWindow {
     }
 }
 
-/** Midnight to midnight on `yyyy-MM-dd`, for a date the office filed no hours against. */
-private fun localDayOn(date: String): ShiftWindow {
+/** Midnight to midnight on `yyyy-MM-dd`. */
+fun localDayOn(date: String): ShiftWindow {
     val start = date.at("00:00:00") ?: return localDayOf(System.currentTimeMillis())
     return ShiftWindow(start, start.plusOneDay() - 1)
 }
@@ -122,6 +122,46 @@ fun List<DutyAssignment>.attendanceWindowOn(
         ShiftWindow(padded.start, nextStart - 1)
     } else {
         padded
+    }
+}
+
+/**
+ * Which records one date's round is answerable for.
+ *
+ * A shift window alone is not enough, and the roster proves it: a guard who clocked on 23 minutes
+ * early for an 08:00 shift is eight minutes outside the margin the office allows, and a Time Out
+ * once landed seven hours before its own shift began. Bounded by the window alone, those records
+ * appear on no round at all — the guard's own screen would simply not show a scan they made.
+ *
+ * So a record belongs to this date if it falls inside this date's shift, *or* if it falls on this
+ * calendar day and no other date's shift has a better claim on it. That is the same rule the DTR
+ * resolves days by, and it is what keeps the two documents describing the same shift.
+ *
+ * [query] is the span to ask the database for — wide enough to hold both readings. [claims] then
+ * decides, which cannot be done in SQL because it depends on every other day's hours.
+ */
+class RoundBounds(val query: ShiftWindow, private val decide: (Long) -> Boolean) {
+    fun claims(millis: Long): Boolean = decide(millis)
+}
+
+fun List<DutyAssignment>.roundBoundsOn(
+    date: String,
+    earlyMinutes: Int,
+    graceMinutes: Int,
+): RoundBounds {
+    val shift = attendanceWindowOn(date, earlyMinutes, graceMinutes)
+    val day = localDayOn(date)
+
+    val others = map { it.date }.distinct()
+        .filter { it != date }
+        .map { attendanceWindowOn(it, earlyMinutes, graceMinutes) }
+
+    return RoundBounds(
+        query = ShiftWindow(minOf(shift.start, day.start), maxOf(shift.end, day.end)),
+    ) { millis ->
+        // The shift first: a Time Out at 07:05 belongs to the night that ended, not to the
+        // morning it happened in. Only a record no shift wants falls back to its own date.
+        millis in shift || (millis in day && others.none { millis in it })
     }
 }
 

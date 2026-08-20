@@ -100,6 +100,7 @@ fun GuardApp(
             state = update,
             onUpdate = updateViewModel::startUpdate,
             onRetry = updateViewModel::retryDownload,
+            onSync = updateViewModel::syncBeforeUpdate,
         )
         return
     }

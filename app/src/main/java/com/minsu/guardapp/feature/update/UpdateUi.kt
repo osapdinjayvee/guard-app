@@ -21,6 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,7 +45,12 @@ import com.minsu.guardapp.ui.components.GuardCard
  * capture, acknowledge, and only then find out the record could not be sent.
  */
 @Composable
-fun UpdateRequiredScreen(state: UpdateUiState, onUpdate: () -> Unit, onRetry: () -> Unit) {
+fun UpdateRequiredScreen(
+    state: UpdateUiState,
+    onUpdate: () -> Unit,
+    onRetry: () -> Unit,
+    onSync: () -> Unit = {},
+) {
     BackHandler(enabled = true) { /* Deliberately inescapable. */ }
 
     Column(
@@ -71,8 +77,69 @@ fun UpdateRequiredScreen(state: UpdateUiState, onUpdate: () -> Unit, onRetry: ()
 
         GuardCard { UpdateDetails(state) }
 
+        UnsyncedWarning(state, onSync = onSync)
+
         Spacer(Modifier.height(20.dp))
         UpdateActions(state, onUpdate = onUpdate, onRetry = onRetry, onLater = null)
+    }
+}
+
+/**
+ * The records still on this phone, and the one way to send them.
+ *
+ * Shown only when there are any. An ordinary update installs over the app and leaves them
+ * untouched, so this is not a step the guard must take — but the screen above it permits nothing
+ * else, and a handset that turns out not to be able to take the APK has no route back to Sync.
+ * The way out of that is an uninstall, which destroys exactly these records.
+ */
+@Composable
+private fun UnsyncedWarning(state: UpdateUiState, onSync: () -> Unit) {
+    if (state.unsyncedCount <= 0 && state.syncMessage == null) return
+
+    Spacer(Modifier.height(12.dp))
+    GuardCard {
+        if (state.unsyncedCount > 0) {
+            Text(
+                "${state.unsyncedCount} record(s) not yet uploaded",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Updating keeps them, but send them now to be certain.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        state.syncMessage?.let { message ->
+            Spacer(Modifier.height(if (state.unsyncedCount > 0) 8.dp else 0.dp))
+            Text(
+                // The queue drains in the background, so the message the sync returned goes stale
+                // the moment it empties. The count is the live thing; once it reaches zero it is
+                // what the guard is told, not the sentence from a few seconds ago.
+                if (state.unsyncedCount == 0) "All records uploaded. Safe to update." else message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (state.unsyncedCount > 0) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onSync,
+                enabled = !state.isSyncing,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (state.isSyncing) "Syncing…" else "Sync now",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
     }
 }
 

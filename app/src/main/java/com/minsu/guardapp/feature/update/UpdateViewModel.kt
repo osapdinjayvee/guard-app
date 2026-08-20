@@ -9,7 +9,9 @@ import com.minsu.guardapp.core.update.AppUpdate
 import com.minsu.guardapp.core.update.CheckOutcome
 import com.minsu.guardapp.core.update.DownloadState
 import com.minsu.guardapp.core.update.UpdateRepository
+import com.minsu.guardapp.core.sync.SyncScheduler
 import com.minsu.guardapp.core.update.UpdateStatus
+import com.minsu.guardapp.domain.repository.AttendanceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,6 +36,18 @@ data class UpdateUiState(
      * guard has to grant that on a system screen — there is no way to do it from here.
      */
     val needsInstallPermission: Boolean = false,
+    /**
+     * Records still on this phone, queued or stuck.
+     *
+     * Carried here only for the blocking screen. A required update replaces the whole app, so a
+     * guard with records waiting cannot reach Sync anywhere else — and if the install then fails,
+     * on a handset signed with a different key or one that will not take the APK, the only way
+     * out is uninstall, which destroys them.
+     */
+    val unsyncedCount: Int = 0,
+    val isSyncing: Boolean = false,
+    /** What the last sync from the blocking screen did. There is no snackbar host behind it. */
+    val syncMessage: String? = null,
 ) {
     val available: AppUpdate?
         get() = when (val s = status) {
@@ -51,11 +65,24 @@ class UpdateViewModel @Inject constructor(
     private val repository: UpdateRepository,
     private val downloader: ApkDownloader,
     private val installer: ApkInstaller,
+    private val attendance: AttendanceRepository,
+    scheduler: SyncScheduler,
     @InstalledVersionCode private val installedVersionCode: Int,
 ) : ViewModel() {
 
     private val permissionNeeded = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
+    private val syncResult = MutableStateFlow<String?>(null)
+
+    /** Waiting records and whether the queue is draining, for the blocking screen. */
+    private val queue = combine(
+        attendance.observeUnsyncedCount(),
+        attendance.observeStuckCount(),
+        scheduler.observeSyncing(),
+        syncResult,
+    ) { pending, stuck, syncing, result -> QueuedWork(pending + stuck, syncing, result) }
+
+    private data class QueuedWork(val waiting: Int, val syncing: Boolean, val message: String?)
 
     /** One-shot text for the Account screen's snackbar. The gate does not use it. */
     val snackbar: StateFlow<String?> = message
@@ -73,8 +100,10 @@ class UpdateViewModel @Inject constructor(
         downloader.progress,
         repository.isChecking,
         permissionNeeded,
-        combine(repository.available, chosen) { versions, code -> versions to code },
-    ) { status, download, checking, needsPermission, (versions, code) ->
+        combine(repository.available, chosen, queue) { versions, code, work ->
+            Triple(versions, code, work)
+        },
+    ) { status, download, checking, needsPermission, (versions, code, work) ->
         val newest = when (val s = status) {
             is UpdateStatus.Available -> s.update
             is UpdateStatus.Required -> s.update
@@ -90,8 +119,35 @@ class UpdateViewModel @Inject constructor(
             // nothing: the office withdrawing a release must not leave the button inert.
             selected = versions.firstOrNull { it.versionCode == code } ?: newest,
             needsInstallPermission = needsPermission,
+            unsyncedCount = work.waiting,
+            isSyncing = work.syncing,
+            syncMessage = work.message,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpdateUiState())
+
+    /**
+     * Drain the queue from behind the block.
+     *
+     * The one action allowed on a screen that otherwise permits nothing. A guard held there has
+     * no other route to their unsynced records, and an update they cannot install — the wrong
+     * signing key, no storage — would leave the only way forward being an uninstall that takes
+     * the records with it.
+     */
+    fun syncBeforeUpdate() = viewModelScope.launch {
+        val waiting = uiState.value.unsyncedCount
+        val outcome = attendance.syncNow()
+
+        syncResult.value = when {
+            // Offline is not a failure worth alarming anyone with: re-queuing costs nothing and
+            // the work is constrained on connectivity, so it fires the moment signal returns.
+            !outcome.reachedServer ->
+                "You're offline. $waiting record(s) are safe on this phone and will upload when you reconnect."
+            outcome.requeued > 0 -> "Retrying $waiting record(s) the server would not take."
+            // Reached the server; the upload itself runs in the background. The live count is what
+            // says when it is finished, and the screen reads that rather than this sentence.
+            else -> "Uploading $waiting record(s)…"
+        }
+    }
 
     /** Choose a build other than the newest. */
     fun select(update: AppUpdate) {

@@ -65,6 +65,66 @@ fun DutyAssignment.shiftStart(): Long? = date.at(startsAt)
 fun DutyAssignment?.attendanceWindow(nowMillis: Long): ShiftWindow =
     this?.shiftWindow() ?: localDayOf(nowMillis)
 
+/**
+ * The span to count one *named* date's attendance over — what a guard sees when they open a past
+ * day's round.
+ *
+ * Not the calendar day. A guard rostered 23:00–06:00 on the 19th closes that shift at 06:00 on the
+ * 20th, and the 20th's own shift may not start until the afternoon. Bounding the 20th by its
+ * calendar day puts the night guard's 06:00 Time Out on a shift they had not yet started, and
+ * takes it off the one they actually worked — the same day's-worth-of-midnight assumption that
+ * this whole file exists to undo, surviving in the one screen that asks about a date rather than
+ * about now.
+ *
+ * A day may hold more than one shift, so the answer spans from the earliest start to the latest
+ * end rather than picking one. Days the office filed without hours — a rest day is filed exactly
+ * that way — fall back to the calendar day, which is the only reading left.
+ */
+fun List<DutyAssignment>.windowOn(date: String): ShiftWindow {
+    val windows = filter { it.date == date }.mapNotNull { it.shiftWindow() }
+
+    return if (windows.isEmpty()) {
+        localDayOn(date)
+    } else {
+        ShiftWindow(windows.minOf { it.start }, windows.maxOf { it.end })
+    }
+}
+
+/** Midnight to midnight on `yyyy-MM-dd`, for a date the office filed no hours against. */
+private fun localDayOn(date: String): ShiftWindow {
+    val start = date.at("00:00:00") ?: return localDayOf(System.currentTimeMillis())
+    return ShiftWindow(start, start.plusOneDay() - 1)
+}
+
+/**
+ * [windowOn] widened by the margins the office allows, which is what a round must actually count.
+ *
+ * The bare shift hours are not the hours a shift's records land in, and a screen bounded by them
+ * shows a shift with no end. A guard clocks on a few minutes early and clocks off a few minutes
+ * late — walking back from the far side of campus, waiting for their relief — and both those
+ * records belong to the shift they were working. The office sets how much of each.
+ *
+ * The grace is not allowed to reach past the start of the next shift. Otherwise the two-hour
+ * default swallows the following shift's Time In and puts it on the previous day's round, which is
+ * the bug this file exists to fix pointing the other way.
+ */
+fun List<DutyAssignment>.attendanceWindowOn(
+    date: String,
+    earlyMinutes: Int,
+    graceMinutes: Int,
+): ShiftWindow {
+    val shift = windowOn(date)
+    val padded = shift.padded(beforeMinutes = earlyMinutes, afterMinutes = graceMinutes)
+
+    val nextStart = mapNotNull { it.shiftStart() }.filter { it > shift.end }.minOrNull()
+
+    return if (nextStart != null && padded.end >= nextStart) {
+        ShiftWindow(padded.start, nextStart - 1)
+    } else {
+        padded
+    }
+}
+
 private fun localDayOf(millis: Long): ShiftWindow {
     val start = Calendar.getInstance().apply {
         timeInMillis = millis

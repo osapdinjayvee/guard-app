@@ -11,8 +11,11 @@ import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.SyncState
+import com.minsu.guardapp.domain.model.DutyAssignment
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
+import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,6 +34,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoundViewModelTest {
@@ -40,6 +46,36 @@ class RoundViewModelTest {
 
     @After
     fun tearDown() = Dispatchers.resetMain()
+
+    private companion object {
+        /** The date most cases run on. Nothing is rostered against it, so it falls back to the day. */
+        const val DATE = "2026-07-13"
+
+        /** The rostering from the field report: a night shift, then the next afternoon. */
+        val nightThenAfternoon = listOf(
+            duty("2026-08-19", "23:00", "06:00"),
+            duty("2026-08-20", "15:00", "23:00"),
+        )
+
+        fun duty(date: String, startsAt: String, endsAt: String) = DutyAssignment(
+            date = date,
+            dutyType = DutyType.ROVING,
+            dutyName = "Roving Guard",
+            startsAt = startsAt,
+            endsAt = endsAt,
+            totalHours = 8f,
+        )
+
+        fun midnight(date: String): Long = Calendar.getInstance().apply {
+            time = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)!!
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        fun hours(count: Int): Long = count * 60L * 60 * 1000
+    }
 
     /**
      * A post where shifts start and end is not a stop on the round.
@@ -61,7 +97,7 @@ class RoundViewModelTest {
         assertEquals(listOf("CP-LIBRARY"), state.stops.map { it.checkpoint.code })
         assertEquals(1, state.total)
         // The Time In still shows as the shift's opening; it is simply not a patrol stop.
-        assertEquals(500L, state.timedInAt)
+        assertEquals(midnight(DATE) + 500L, state.timedInAt)
     }
 
     /**
@@ -84,7 +120,7 @@ class RoundViewModelTest {
 
         assertEquals(2, gate.visits)
         assertTrue(gate.isDone)
-        assertEquals(2_000L, gate.lastVisitedAt)
+        assertEquals(midnight(DATE) + 2_000L, gate.lastVisitedAt)
 
         assertEquals(1, library.visits)
         assertFalse(library.isDone)
@@ -119,12 +155,12 @@ class RoundViewModelTest {
         )
 
         assertEquals(1, state.stops.single().visits)
-        assertEquals(500L, state.stops.single().lastVisitedAt)
+        assertEquals(midnight(DATE) + 500L, state.stops.single().lastVisitedAt)
 
         // One visit of the two: still owed, still listed, not quietly ticked off.
         assertFalse(state.stops.single().isDone)
         assertEquals(0, state.done)
-        assertEquals(500L, state.timedInAt)
+        assertEquals(midnight(DATE) + 500L, state.timedInAt)
     }
 
     /** The Time Out cannot count toward the round it is asking permission for. */
@@ -153,6 +189,71 @@ class RoundViewModelTest {
         assertTrue(state.stops.single().isDone)
     }
 
+    /**
+     * Reported from the field.
+     *
+     * Rostered 23:00–06:00 on the 19th and 15:00–23:00 on the 20th, the guard opened the 20th and
+     * found a Time Out already against it at 6am — nine hours before that shift even starts. It
+     * was the previous night's, claimed by the 20th because the round asked about the calendar day
+     * rather than about the shift.
+     */
+    @Test
+    fun `the previous night's time out does not appear on the next day's round`() = runTest {
+        val state = state(
+            posts = listOf(post(1, "CP-LIBRARY")),
+            records = listOf(
+                record(AttendanceType.TIME_OUT, "GUARD_HOUSE", at = hours(6), date = "2026-08-20"),
+                record(AttendanceType.TIME_IN, "GUARD_HOUSE", at = hours(15), id = "b", date = "2026-08-20"),
+            ),
+            duties = nightThenAfternoon,
+            date = "2026-08-20",
+        )
+
+        assertNull(state.timedOutAt)
+        assertEquals(midnight("2026-08-20") + hours(15), state.timedInAt)
+    }
+
+    /** The other half of it: the night shift keeps the Time Out that closes it. */
+    @Test
+    fun `a night shift's round holds the time out that closes it`() = runTest {
+        val state = state(
+            posts = listOf(post(1, "CP-LIBRARY")),
+            records = listOf(
+                record(AttendanceType.TIME_OUT, "GUARD_HOUSE", at = hours(6), date = "2026-08-20"),
+            ),
+            duties = nightThenAfternoon,
+            date = "2026-08-19",
+        )
+
+        assertEquals(midnight("2026-08-20") + hours(6), state.timedOutAt)
+    }
+
+    /**
+     * A Time Out four minutes past the scheduled end still closes that shift.
+     *
+     * Bounding the round by the bare shift hours would leave every ordinary same-day shift looking
+     * as though it had never been closed — the same complaint as the night-shift one, reached from
+     * the other direction.
+     */
+    @Test
+    fun `a late time out still closes a same-day shift`() = runTest {
+        val state = state(
+            posts = listOf(post(1, "CP-LIBRARY")),
+            records = listOf(
+                record(
+                    AttendanceType.TIME_OUT,
+                    "GUARD_HOUSE",
+                    at = hours(23) + 4 * 60 * 1000L,
+                    date = "2026-08-20",
+                ),
+            ),
+            duties = nightThenAfternoon,
+            date = "2026-08-20",
+        )
+
+        assertEquals(midnight("2026-08-20") + hours(23) + 4 * 60 * 1000L, state.timedOutAt)
+    }
+
     /** The QR carries the code in whatever case it was printed. Matching must not care. */
     @Test
     fun `post codes match regardless of case`() = runTest {
@@ -171,12 +272,15 @@ class RoundViewModelTest {
     private fun TestScope.state(
         posts: List<Checkpoint>,
         records: List<AttendanceRecord>,
+        duties: List<DutyAssignment> = emptyList(),
+        date: String = DATE,
     ): RoundUiState {
         val viewModel = RoundViewModel(
             checkpoints = FakeCheckpoints(posts),
             attendance = FakeAttendance(records),
             settings = FakeSettings,
-            savedStateHandle = SavedStateHandle(mapOf("date" to "2026-07-13")),
+            schedule = FakeSchedule(duties),
+            savedStateHandle = SavedStateHandle(mapOf("date" to date)),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect { }
@@ -201,17 +305,25 @@ class RoundViewModelTest {
         allowsTimeInOut = allowsTimeInOut,
     )
 
+    /**
+     * A record on the round's own date.
+     *
+     * [at] is an offset from that date's midnight rather than an absolute instant, because the
+     * round is now bounded by a real window and a bare `500L` is a moment in 1970 — outside every
+     * window there is. The cases below care about the order records fall in, not the hour.
+     */
     private fun record(
         type: AttendanceType,
         code: String,
         at: Long,
         sync: SyncState = SyncState.SYNCED,
         id: String = "a",
+        date: String = DATE,
     ) = AttendanceRecord(
         id = "$type-$code-$id",
         checkpointCode = code,
         type = type,
-        capturedAt = at,
+        capturedAt = midnight(date) + at,
         selfiePath = "",
         latitude = null,
         longitude = null,
@@ -219,6 +331,15 @@ class RoundViewModelTest {
         syncState = sync,
         lastError = null,
     )
+
+    private class FakeSchedule(private val duties: List<DutyAssignment>) : ScheduleRepository {
+        override fun observeCurrentDuty(): Flow<DutyAssignment?> = MutableStateFlow(duties.firstOrNull())
+        override fun observeAll(): Flow<List<DutyAssignment>> = MutableStateFlow(duties)
+        override suspend fun currentDuty(): DutyAssignment? = duties.firstOrNull()
+        override val isLinked: Flow<Boolean> = MutableStateFlow(true)
+        override suspend fun postTimedInAt(window: ShiftWindow): Long? = null
+        override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
+    }
 
     private object FakeSettings : SettingsRepository {
         override fun observe(): Flow<AppSettings> = MutableStateFlow(AppSettings())
@@ -247,10 +368,19 @@ class RoundViewModelTest {
         override fun observeRejectedCount(): Flow<Int> = MutableStateFlow(0)
         override suspend fun discardRejected(): Int = 0
         override suspend fun syncNow(): SyncOutcome = SyncOutcome()
+        /*
+         * Honours the range, which this fake used not to do.
+         *
+         * Returning everything regardless of the bounds made every test here pass no matter what
+         * window the ViewModel asked for — so the round could go on counting a whole calendar day
+         * while the suite reported it was fine. The bug a guard found on their own phone, a night
+         * shift's 6am Time Out appearing on the next day's round, was invisible from in here.
+         */
         override fun observeInRange(
             fromMillis: Long,
             toMillis: Long,
-        ): Flow<List<AttendanceRecord>> = MutableStateFlow(records)
+        ): Flow<List<AttendanceRecord>> =
+            MutableStateFlow(records.filter { it.capturedAt in fromMillis..toMillis })
         override suspend fun checkpointVisitsIn(window: ShiftWindow): Map<Long, Int> = emptyMap()
         override suspend fun lastVisitedCheckpointIn(window: ShiftWindow): Long? = null
         override suspend fun hasTimedOutIn(window: ShiftWindow): Boolean = false

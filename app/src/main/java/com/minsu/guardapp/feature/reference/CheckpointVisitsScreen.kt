@@ -38,22 +38,29 @@ import com.minsu.guardapp.core.media.SelfieStore
 import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.SyncState
+import com.minsu.guardapp.domain.model.attendanceWindowOn
 import com.minsu.guardapp.domain.repository.AttendanceRepository
+import com.minsu.guardapp.domain.repository.ScheduleRepository
+import com.minsu.guardapp.domain.repository.SettingsRepository
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.ScreenTitle
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel(assistedFactory = CheckpointVisitsViewModel.Factory::class)
 class CheckpointVisitsViewModel @AssistedInject constructor(
     // Both are Strings, so Dagger needs them named or it cannot tell which is which — and a
@@ -61,6 +68,8 @@ class CheckpointVisitsViewModel @AssistedInject constructor(
     @Assisted("code") private val checkpointCode: String,
     @Assisted("date") private val date: String,
     attendance: AttendanceRepository,
+    schedule: ScheduleRepository,
+    settings: SettingsRepository,
     private val selfies: SelfieStore,
 ) : ViewModel() {
 
@@ -71,9 +80,19 @@ class CheckpointVisitsViewModel @AssistedInject constructor(
      * standing at the post with no signal, and a record still queued for upload counts — the scan
      * happened and the photograph exists whether or not anyone has received it yet.
      */
-    val visits: StateFlow<List<AttendanceRecord>> = run {
-        val from = startOfDayMillis(date)
-        attendance.observeInRange(from, from + DAY_MILLIS)
+    val visits: StateFlow<List<AttendanceRecord>> =
+        // The shift filed for this date, not the date's own midnights — the same bound the round
+        // this screen is opened from uses, so the count there and the photographs here cannot
+        // disagree about which visits belong to the night the guard actually worked.
+        combine(schedule.observeAll(), settings.observe()) { duties, config ->
+            duties.attendanceWindowOn(
+                date = date,
+                earlyMinutes = config.timeInEarlyMinutes,
+                graceMinutes = config.shiftCloseGraceMinutes,
+            )
+        }
+            .distinctUntilChanged()
+            .flatMapLatest { window -> attendance.observeInRange(window.start, window.end + 1) }
             .map { records ->
                 records
                     .filter {
@@ -83,7 +102,6 @@ class CheckpointVisitsViewModel @AssistedInject constructor(
                     .sortedByDescending { it.capturedAt }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    }
 
     suspend fun selfie(record: AttendanceRecord): File? =
         selfies.resolve(record.id, record.selfiePath)
@@ -94,10 +112,6 @@ class CheckpointVisitsViewModel @AssistedInject constructor(
             @Assisted("code") checkpointCode: String,
             @Assisted("date") date: String,
         ): CheckpointVisitsViewModel
-    }
-
-    private companion object {
-        const val DAY_MILLIS = 24L * 60 * 60 * 1000
     }
 }
 
@@ -271,17 +285,3 @@ private fun VisitSelfie(visit: AttendanceRecord, resolve: suspend (AttendanceRec
 private fun visitTime(millis: Long): String =
     SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date(millis))
 
-/** Midnight local on [date], `yyyy-MM-dd`. Falls back to today if the date cannot be read. */
-private fun startOfDayMillis(date: String): Long {
-    val parsed = runCatching {
-        SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)
-    }.getOrNull()
-
-    return Calendar.getInstance().apply {
-        parsed?.let { time = it }
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-}

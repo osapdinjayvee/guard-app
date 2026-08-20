@@ -39,16 +39,22 @@ import com.minsu.guardapp.domain.model.AttendanceRecord
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.roundPosts
+import com.minsu.guardapp.domain.model.attendanceWindowOn
 import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.CheckpointRepository
+import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.ScreenTitle
 import com.minsu.guardapp.ui.theme.SyncSynced
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -123,37 +129,52 @@ internal fun buildStops(
  * answer from memory at the end of an eight-hour shift. A record that is still queued for upload
  * counts as done here, because it is: the scan happened, and the evidence is saved.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class RoundViewModel @Inject constructor(
     checkpoints: CheckpointRepository,
     attendance: AttendanceRepository,
     settings: SettingsRepository,
+    schedule: ScheduleRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val date: String = savedStateHandle["date"] ?: ""
 
-    val uiState: StateFlow<RoundUiState> = run {
-        val from = startOfDay(date)
-        combine(
-            checkpoints.observeActive(),
-            attendance.observeInRange(from, from + DAY_MILLIS),
-            settings.observe(),
-        ) { posts, records, config ->
-            val required = config.minVisitsPerCheckpoint
-
-            RoundUiState(
+    /*
+     * Bounded by the shift filed for this date, not by the date's own midnights.
+     *
+     * A guard rostered 23:00-06:00 on the 19th closes it at 06:00 on the 20th. Read as a calendar
+     * day, the 20th's round claimed that Time Out as its own — a shift the guard had not started
+     * yet showing as already closed, hours before their 15:00 start — while the 19th's round
+     * showed a Time In with no Time Out against it.
+     */
+    val uiState: StateFlow<RoundUiState> =
+        combine(schedule.observeAll(), settings.observe()) { duties, config ->
+            duties.attendanceWindowOn(
                 date = date,
-                stops = buildStops(posts.roundPosts(), records, required),
-                timedInAt = records.firstOrNull { it.type == AttendanceType.TIME_IN }?.capturedAt,
-                timedOutAt = records.firstOrNull { it.type == AttendanceType.TIME_OUT }?.capturedAt,
-            )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RoundUiState(date = date))
-    }
-
-    private companion object {
-        const val DAY_MILLIS = 24L * 60 * 60 * 1000
-    }
+                earlyMinutes = config.timeInEarlyMinutes,
+                graceMinutes = config.shiftCloseGraceMinutes,
+            ) to config.minVisitsPerCheckpoint
+        }
+            .distinctUntilChanged()
+            .flatMapLatest { (window, required) ->
+                combine(
+                    checkpoints.observeActive(),
+                    // `end + 1` because the query's upper bound is exclusive while a window's is
+                    // not: a Time Out landing exactly on the last millisecond of its own shift
+                    // would otherwise be the one record the round could not see.
+                    attendance.observeInRange(window.start, window.end + 1),
+                ) { posts, records ->
+                    RoundUiState(
+                        date = date,
+                        stops = buildStops(posts.roundPosts(), records, required),
+                        timedInAt = records.firstOrNull { it.type == AttendanceType.TIME_IN }?.capturedAt,
+                        timedOutAt = records.firstOrNull { it.type == AttendanceType.TIME_OUT }?.capturedAt,
+                    )
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RoundUiState(date = date))
 }
 
 @Composable
@@ -355,18 +376,6 @@ private fun StatusDot(done: Boolean) {
         }
     }
 }
-
-/** Local midnight on [iso]. Falls back to the epoch, which shows an empty round rather than crashing. */
-private fun startOfDay(iso: String): Long = runCatching {
-    val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(iso)!!
-    Calendar.getInstance().apply {
-        time = parsed
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-}.getOrDefault(0L)
 
 private fun longDate(iso: String): String = runCatching {
     val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(iso)!!

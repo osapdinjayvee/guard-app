@@ -116,7 +116,7 @@ class MigrationTest {
         // The *current* version, not a number that was current once. Left behind at 5 while the
         // schema moved on, this test would keep passing while validating nothing about the later
         // migrations — including whether the tables they create match what Room expects to find.
-        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, *GUARD_MIGRATIONS)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, *GUARD_MIGRATIONS)
 
         db.query("SELECT id, syncStatus FROM attendance").use { c ->
             assertTrue("the unsynced attendance survived every migration", c.moveToFirst())
@@ -203,7 +203,7 @@ class MigrationTest {
             )
         }
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, *GUARD_MIGRATIONS)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, *GUARD_MIGRATIONS)
 
         // Both shifts fit now. Under the old key the second would have replaced the first.
         db.execSQL(
@@ -217,6 +217,33 @@ class MigrationTest {
         db.query("SELECT COUNT(*) FROM schedule WHERE date = '2026-08-06'").use { c ->
             assertTrue(c.moveToFirst())
             assertEquals("a split day keeps both shifts", 2, c.getInt(0))
+        }
+    }
+
+    /**
+     * Stationed and roving guards stop being asked the same questions.
+     *
+     * Every question already on the phone becomes `BOTH`, which is what they effectively were:
+     * before the column existed, every question was asked of every guard. Getting the default wrong
+     * would silently drop questions from an evaluation, and the server refuses a short one.
+     */
+    @Test
+    fun migrating_8_to_9_asks_existing_questions_of_every_duty() {
+        helper.createDatabase(TEST_DB, 8).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO evaluation_questions (id, question, timing, sortOrder, updatedAt)
+                VALUES (1, 'Was the logbook handed over properly?', 'TIME_OUT', 0, 1783663331000)
+                """.trimIndent()
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, *GUARD_MIGRATIONS)
+
+        db.query("SELECT question, targetGuardType FROM evaluation_questions").use { c ->
+            assertTrue("the cached question survived", c.moveToFirst())
+            assertEquals("Was the logbook handed over properly?", c.getString(0))
+            assertEquals("BOTH", c.getString(1))
         }
     }
 

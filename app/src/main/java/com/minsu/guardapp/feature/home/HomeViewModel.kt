@@ -197,8 +197,12 @@ class HomeViewModel @Inject constructor(
             // unable to submit an attendance they have already taken.
             duties.refresh()
             // Needed at Time Out, which happens at the end of a shift, at a post, with no signal.
-            // Cached here for the same reason as the duties and the roster.
-            evaluations.refresh()
+            // Cached here for the same reason as the duties and the schedule.
+            //
+            // Fetched for the duty being worked: the office asks a stationed guard and a rover
+            // different questions, and the server sends only the set that applies. Refreshing Home
+            // is where a guard's phone catches up after their duty changes.
+            evaluations.refresh(schedule.currentDuty()?.dutyType)
             // Pulls back records this device does not have. Matters most on a device that has none
             // — a reinstall, cleared data, a replacement handset — where History and Reports would
             // otherwise read as though the guard's attendance had been lost with the app.

@@ -165,6 +165,23 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+/**
+ * The office asks stationed and roving guards different questions.
+ *
+ * `BOTH` for every row already on the phone, which is what they effectively were: before the column
+ * existed, every question was asked of every guard. The set is replaced wholesale on the next
+ * refresh anyway, so this default lives for minutes — but a NOT NULL column with no default is a
+ * migration that fails on a device holding unsynced attendance, which is not a trade worth making
+ * to save one word.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE evaluation_questions ADD COLUMN targetGuardType TEXT NOT NULL DEFAULT 'BOTH'"
+        )
+    }
+}
+
 val GUARD_MIGRATIONS = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -173,4 +190,5 @@ val GUARD_MIGRATIONS = arrayOf(
     MIGRATION_5_6,
     MIGRATION_6_7,
     MIGRATION_7_8,
+    MIGRATION_8_9,
 )

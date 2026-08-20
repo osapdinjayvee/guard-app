@@ -1,5 +1,6 @@
 package com.minsu.guardapp.feature.home
 
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.core.common.Clock
 import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.core.connectivity.NetworkMonitor
@@ -115,8 +116,9 @@ class HomeViewModelTest {
     }
     private var evaluationRefreshes = 0
     private val evaluationRepo = object : EvaluationRepository {
-        override suspend fun questions(type: AttendanceType): List<EvaluationQuestion> = emptyList()
-        override suspend fun refresh(): ApiResult<Unit> {
+        override suspend fun questions(type: AttendanceType, duty: DutyType?): List<EvaluationQuestion> = emptyList()
+        override suspend fun isStaleFor(duty: DutyType?): Boolean = false
+        override suspend fun refresh(duty: DutyType?): ApiResult<Unit> {
             evaluationRefreshes++
             return ApiResult.Success(Unit)
         }

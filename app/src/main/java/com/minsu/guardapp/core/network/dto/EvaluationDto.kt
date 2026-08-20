@@ -30,6 +30,14 @@ data class EvaluationQuestionDto(
      * post-shift evaluation instead of an empty one.
      */
     @Json(name = "type") val type: String? = null,
+    /**
+     * `stationed`, `roving` or `both` — which duty the office asks this of.
+     *
+     * A stationed guard is not asked about the round, and a rover is not asked about the post they
+     * never leave. Defaulted like [type]: a server that predates the field asks everyone the same
+     * questions, which is what it did before the field existed.
+     */
+    @Json(name = "target_guard_type") val targetGuardType: String? = null,
     @Json(name = "sort_order") val sortOrder: Int = 0,
 )
 

@@ -2,6 +2,9 @@ package com.minsu.guardapp.feature.selfie
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.minsu.guardapp.domain.repository.ScheduleRepository
+import com.minsu.guardapp.domain.model.DutyAssignment
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.ShiftWindow
 import com.minsu.guardapp.core.camera.SelfieCapture
 import com.minsu.guardapp.core.common.Clock
@@ -121,6 +124,7 @@ class SelfieViewModelResetTest {
         settings = FakeSettings(),
         duties = FakeDuties(),
         evaluations = FakeEvaluations(),
+        schedule = FakeSchedule(),
         attendance = FakeAttendance(),
         location = FakeLocation(),
         selfieCapture = SelfieCapture(ApplicationProvider.getApplicationContext()),
@@ -145,7 +149,17 @@ class SelfieViewModelResetTest {
     }
 
     private class FakeEvaluations : EvaluationRepository {
-        override suspend fun questions(type: AttendanceType): List<EvaluationQuestion> = emptyList()
+        override suspend fun questions(type: AttendanceType, duty: DutyType?): List<EvaluationQuestion> = emptyList()
+        override suspend fun isStaleFor(duty: DutyType?): Boolean = false
+        override suspend fun refresh(duty: DutyType?): ApiResult<Unit> = ApiResult.Success(Unit)
+    }
+
+    private class FakeSchedule : ScheduleRepository {
+        override fun observeCurrentDuty(): Flow<DutyAssignment?> = MutableStateFlow(null)
+        override fun observeAll(): Flow<List<DutyAssignment>> = MutableStateFlow(emptyList())
+        override suspend fun currentDuty(): DutyAssignment? = null
+        override val isLinked: Flow<Boolean> = MutableStateFlow(true)
+        override suspend fun postTimedInAt(window: ShiftWindow): Long? = null
         override suspend fun refresh(): ApiResult<Unit> = ApiResult.Success(Unit)
     }
 

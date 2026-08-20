@@ -232,7 +232,42 @@ data class EvaluationQuestion(
     val question: String,
     val sortOrder: Int,
     val timing: EvaluationTiming = EvaluationTiming.TIME_OUT,
+    val asksOf: GuardTarget = GuardTarget.BOTH,
 )
+
+/**
+ * Which duty a question is asked of.
+ *
+ * A stationed guard stands at one post and is not asked how the round went; a rover is not asked
+ * about a post they never stayed at. The office decides per question, and the server sends only the
+ * set that applies — but it decides that from the duty the guard held when the set was *fetched*,
+ * which is why the app keeps the value and checks it again at the moment of asking.
+ */
+enum class GuardTarget {
+    STATIONED,
+    ROVING,
+    BOTH,
+    ;
+
+    fun appliesTo(duty: DutyType?): Boolean = when (this) {
+        BOTH -> true
+        STATIONED -> duty == DutyType.STATIONED
+        ROVING -> duty == DutyType.ROVING
+    }
+
+    companion object {
+        /**
+         * The server's wording. Anything unrecognised — including a server too old to send it —
+         * is [BOTH]: asking a guard a question meant for the other duty is a small wrong, and
+         * dropping one they are required to answer is a 422 they cannot get past.
+         */
+        fun fromWire(value: String?): GuardTarget = when (value?.uppercase()) {
+            "STATIONED" -> STATIONED
+            "ROVING" -> ROVING
+            else -> BOTH
+        }
+    }
+}
 
 /** The guard's answer to one of them, carried with the Time Out it describes. */
 data class EvaluationAnswer(

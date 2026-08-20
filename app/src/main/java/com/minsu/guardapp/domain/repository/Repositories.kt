@@ -11,6 +11,7 @@ import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.CheckpointResolution
 import com.minsu.guardapp.domain.model.Duty
 import com.minsu.guardapp.domain.model.DutyAssignment
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.EvaluationQuestion
 import com.minsu.guardapp.domain.model.GuardProfile
 import com.minsu.guardapp.domain.model.SyncOutcome
@@ -247,7 +248,21 @@ interface EvaluationRepository {
      * guard opens a shift with signal and closes it without, so the Time Out questions have to
      * already be on the phone by the time they are needed.
      */
-    suspend fun questions(type: AttendanceType): List<EvaluationQuestion>
+    /**
+     * @param duty what the guard is working. Questions the office asks only of the *other* duty are
+     *   left out, and a change of duty since the set was cached is what [isStaleFor] reports.
+     */
+    suspend fun questions(type: AttendanceType, duty: DutyType?): List<EvaluationQuestion>
 
-    suspend fun refresh(): ApiResult<Unit>
+    /**
+     * True when the cached set was fetched for a different duty than the one being worked.
+     *
+     * The server filters the set by the guard's duty at the moment of the request, so a set cached
+     * on a stationed day is missing every roving-only question. Answering the wrong set is not a
+     * cosmetic error: the server checks completeness on submission and answers a short evaluation
+     * with a 422, which the sync queue treats as permanent.
+     */
+    suspend fun isStaleFor(duty: DutyType?): Boolean
+
+    suspend fun refresh(duty: DutyType?): ApiResult<Unit>
 }

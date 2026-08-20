@@ -20,6 +20,7 @@ import com.minsu.guardapp.domain.repository.AttendanceRepository
 import com.minsu.guardapp.domain.repository.DutyRepository
 import com.minsu.guardapp.domain.repository.EvaluationRepository
 import com.minsu.guardapp.domain.repository.ProfileRepository
+import com.minsu.guardapp.domain.repository.ScheduleRepository
 import com.minsu.guardapp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -224,6 +225,7 @@ class SelfieViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val duties: DutyRepository,
     private val evaluations: EvaluationRepository,
+    private val schedule: ScheduleRepository,
     private val attendance: AttendanceRepository,
     private val location: LocationProvider,
     private val selfieCapture: SelfieCapture,
@@ -269,14 +271,15 @@ class SelfieViewModel @Inject constructor(
 
         sessionJobs += viewModelScope.launch {
             val settingsNow = settings.current()
+            val dutyType = schedule.currentDuty()?.dutyType
             _uiState.update {
                 it.copy(
                     guardName = profiles.observe().first()?.name.orEmpty(),
                     settings = settingsNow,
                     duty = duties.activeDuty(),
-                    // Whichever set belongs to this end of the shift. Read from the cache, so the
-                    // questions are there at a perimeter post with no signal.
-                    questions = type?.let { evaluations.questions(it) }.orEmpty(),
+                    // Whichever set belongs to this end of the shift, for this duty. Read from the
+                    // cache, so the questions are there at a perimeter post with no signal.
+                    questions = type?.let { evaluations.questions(it, dutyType) }.orEmpty(),
                     nowMillis = clock.nowMillis(),
                 )
             }
@@ -288,12 +291,26 @@ class SelfieViewModel @Inject constructor(
         sessionJobs += viewModelScope.launch {
             val captureType = type ?: return@launch
             if (captureType == AttendanceType.CHECKPOINT) return@launch
-            if (evaluations.questions(captureType).isNotEmpty()) return@launch
+
+            val dutyType = schedule.currentDuty()?.dutyType
+
+            /*
+             * Refetched when the *duty* has changed, not only when the cache is empty.
+             *
+             * The office asks a stationed guard and a rover different questions, and the server
+             * sends only the set for the duty it sees at the moment of the request. A guard
+             * stationed yesterday and roving today therefore holds yesterday's set — non-empty, so
+             * the old emptiness check passed it straight through — and the server, which checks
+             * completeness again on submission, answers the Time Out with a 422. The sync queue
+             * treats that as permanent.
+             */
+            val stale = evaluations.isStaleFor(dutyType)
+            if (!stale && evaluations.questions(captureType, dutyType).isNotEmpty()) return@launch
 
             // A successful refresh that comes back empty is an *answer*: this campus asks nothing
             // at this end of the shift. A failed one tells us only that we still do not know.
-            val refreshed = evaluations.refresh()
-            val questions = evaluations.questions(captureType)
+            val refreshed = evaluations.refresh(dutyType)
+            val questions = evaluations.questions(captureType, dutyType)
 
             _uiState.update {
                 it.copy(

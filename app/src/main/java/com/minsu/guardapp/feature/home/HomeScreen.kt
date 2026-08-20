@@ -67,7 +67,7 @@ import java.util.Date
 import java.util.Locale
 
 /** Where Home's tiles lead. The scaffold owns the navigator; Home only says where it wants to go. */
-enum class HomeAction { Scan, History, Reports, Schedule, Checkpoints, Announcements, Handbook, Account }
+enum class HomeAction { Scan, Dtr, Reports, Schedule, Checkpoints, Announcements, Handbook, Account }
 
 @Composable
 fun HomeRoute(
@@ -422,7 +422,7 @@ private fun QuickActions(onAction: (HomeAction) -> Unit) {
     // it teaches the guard that the app is broken, and they stop trusting the tiles that do work.
     val actions = listOf(
         Action(R.drawable.ic_finger_print, "Attendance", HomeAction.Scan),
-        Action(R.drawable.ic_dtr, "DTR", HomeAction.History),
+        Action(R.drawable.ic_dtr, "DTR", HomeAction.Dtr),
         Action(R.drawable.ic_grades, "Reports", HomeAction.Reports),
         Action(R.drawable.ic_calendar, "Schedule", HomeAction.Schedule),
         Action(R.drawable.ic_locator, "Checkpoints", HomeAction.Checkpoints),

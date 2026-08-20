@@ -22,6 +22,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,7 +49,10 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun ReportsScreen(viewModel: ReportsViewModel = hiltViewModel()) {
+fun ReportsScreen(
+    onOpenGuardReport: (start: String, end: String) -> Unit = { _, _ -> },
+    viewModel: ReportsViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -98,6 +102,27 @@ fun ReportsScreen(viewModel: ReportsViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth().height(50.dp),
         ) {
             Text("Export PDF", fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(8.dp))
+
+        /*
+         * The office's own report, for the same range.
+         *
+         * Not a second way to do what the button above does. That one is built on this phone from
+         * the records it happens to hold and is a guard checking their own work; this is the
+         * document the office generates and signs, from what the server actually has. When the two
+         * disagree, the disagreement is the point.
+         */
+        OutlinedButton(
+            onClick = { onOpenGuardReport(state.window.fromMillis.asApiDate(), state.window.toMillis.asApiDate()) },
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+        ) {
+            Text(
+                "Official report",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
         Spacer(Modifier.height(16.dp))
 
@@ -194,3 +219,12 @@ private fun ReportRow(record: AttendanceRecord, onClick: () -> Unit) {
 
 private fun timestamp(millis: Long): String =
     SimpleDateFormat("MMM d · h:mm a", Locale.getDefault()).format(Date(millis))
+
+/**
+ * The date the `guard-report` endpoint takes, in the guard's own timezone.
+ *
+ * Formatted from the window Reports already computed rather than recomputed here, so the PDF
+ * covers exactly the days the totals above it describe.
+ */
+internal fun Long.asApiDate(): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(this))

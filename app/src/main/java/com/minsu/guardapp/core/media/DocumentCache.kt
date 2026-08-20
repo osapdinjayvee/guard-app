@@ -1,6 +1,7 @@
 package com.minsu.guardapp.core.media
 
 import android.content.Context
+import com.minsu.guardapp.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -45,6 +46,18 @@ class DocumentCache @Inject constructor(
     /** Fetches again even if a copy is held, for when the office has published a new edition. */
     suspend fun fresh(identifier: String, url: String): File? = withContext(Dispatchers.IO) {
         download(identifier, url)
+    }
+
+    /**
+     * A document the API generates on demand, at [path] relative to the API root.
+     *
+     * The DTR and the guard report are built per request from attendance the office may still be
+     * correcting, so unlike the handbook there is no edition to hold on to: this always asks the
+     * server, and the cached copy is what the caller falls back to when the ask fails. Goes through
+     * the API's own client, so the guard's token is attached — these endpoints are not public.
+     */
+    suspend fun fetchFromApi(identifier: String, path: String): File? = withContext(Dispatchers.IO) {
+        download(identifier, BuildConfig.API_BASE_URL.trimEnd('/') + "/" + path.trimStart('/'))
     }
 
     private fun download(identifier: String, url: String): File? {

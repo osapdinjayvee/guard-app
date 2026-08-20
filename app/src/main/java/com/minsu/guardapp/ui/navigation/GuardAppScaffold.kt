@@ -47,6 +47,8 @@ import com.minsu.guardapp.feature.reference.ScheduleScreen
 import android.net.Uri
 import com.minsu.guardapp.feature.handbook.HandbookScreen
 import com.minsu.guardapp.feature.reference.CheckpointVisitsScreen
+import com.minsu.guardapp.feature.reports.DtrScreen
+import com.minsu.guardapp.feature.reports.GuardReportScreen
 import com.minsu.guardapp.feature.reports.ReportsScreen
 import com.minsu.guardapp.feature.scan.ScanQrScreen
 
@@ -115,7 +117,9 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             // The four that are bottom-bar destinations navigate as such — the bar
                             // selection follows, and back returns to Home rather than stacking.
                             HomeAction.Scan -> navController.navigateToTopLevel(GuardDestination.ScanQr)
-                            HomeAction.History -> navController.navigateToTopLevel(GuardDestination.History)
+                            // The tile is named DTR and now opens the DTR. History stays on the
+                            // bottom bar, which is where a guard looks for their own records.
+                            HomeAction.Dtr -> navController.navigate(ROUTE_DTR)
                             HomeAction.Reports -> navController.navigateToTopLevel(GuardDestination.Reports)
                             HomeAction.Account -> navController.navigateToTopLevel(GuardDestination.Account)
                             HomeAction.Schedule -> navController.navigateToTopLevel(GuardDestination.Schedule)
@@ -136,7 +140,13 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             composable("$ROUTE_ROUND/{date}") { RoundScreen(onBack = navController::popBackStack) }
             composable(GuardDestination.History.route) { HistoryScreen() }
             composable(GuardDestination.ScanQr.route) { ScanQrScreen() }
-            composable(GuardDestination.Reports.route) { ReportsScreen() }
+            composable(GuardDestination.Reports.route) {
+                ReportsScreen(
+                    onOpenGuardReport = { start, end ->
+                        navController.navigate("$ROUTE_GUARD_REPORT/$start/$end")
+                    },
+                )
+            }
             composable(GuardDestination.Account.route) { AccountScreen() }
 
             // Reference screens, reached from Home's tiles. Not bottom-bar destinations: they are
@@ -144,6 +154,10 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             composable(ROUTE_CHECKPOINTS) { CheckpointsScreen(onBack = navController::popBackStack) }
             composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen(onBack = navController::popBackStack) }
             composable(ROUTE_HANDBOOK) { HandbookScreen(onBack = navController::popBackStack) }
+            composable(ROUTE_DTR) { DtrScreen(onBack = navController::popBackStack) }
+            composable("$ROUTE_GUARD_REPORT/{start}/{end}") {
+                GuardReportScreen(onBack = navController::popBackStack)
+            }
 
             composable("$ROUTE_VISITS/{code}/{name}/{date}") { entry ->
                 CheckpointVisitsScreen(
@@ -242,4 +256,6 @@ private const val ROUTE_ROUND = "schedule/round"
 private const val ROUTE_CHECKPOINTS = "reference/checkpoints"
 private const val ROUTE_ANNOUNCEMENTS = "reference/announcements"
 private const val ROUTE_HANDBOOK = "reference/handbook"
+private const val ROUTE_DTR = "reports/dtr"
+private const val ROUTE_GUARD_REPORT = "reports/guard-report"
 private const val ROUTE_VISITS = "round/visits"

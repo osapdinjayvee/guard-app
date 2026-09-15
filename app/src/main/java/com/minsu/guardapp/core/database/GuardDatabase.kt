@@ -18,8 +18,10 @@ import androidx.room.TypeConverters
         ScheduleEntity::class,
         AnnouncementEntity::class,
         EvaluationQuestionEntity::class,
+        ObservationEntity::class,
+        ObservationPhotoEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(SyncStatusConverter::class, AttendanceTypeConverter::class)
@@ -30,6 +32,7 @@ abstract class GuardDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
     abstract fun announcementDao(): AnnouncementDao
     abstract fun evaluationQuestionDao(): EvaluationQuestionDao
+    abstract fun observationDao(): ObservationDao
 
     companion object {
         const val NAME = "guard.db"

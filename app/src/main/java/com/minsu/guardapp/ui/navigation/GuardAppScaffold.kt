@@ -46,6 +46,8 @@ import com.minsu.guardapp.feature.reference.RoundScreen
 import com.minsu.guardapp.feature.reference.ScheduleScreen
 import android.net.Uri
 import com.minsu.guardapp.feature.handbook.HandbookScreen
+import com.minsu.guardapp.feature.observation.NewObservationScreen
+import com.minsu.guardapp.feature.observation.ObservationsScreen
 import com.minsu.guardapp.feature.reference.CheckpointVisitsScreen
 import com.minsu.guardapp.feature.reports.DtrScreen
 import com.minsu.guardapp.feature.reports.GuardReportScreen
@@ -128,6 +130,7 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                             HomeAction.Announcements -> navController.navigate(ROUTE_ANNOUNCEMENTS)
 
                             HomeAction.Handbook -> navController.navigate(ROUTE_HANDBOOK)
+                            HomeAction.Observations -> navController.navigate(ROUTE_OBSERVATIONS)
                         }
                     },
                 )
@@ -155,6 +158,15 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
             composable(ROUTE_ANNOUNCEMENTS) { AnnouncementsScreen(onBack = navController::popBackStack) }
             composable(ROUTE_HANDBOOK) { HandbookScreen(onBack = navController::popBackStack) }
             composable(ROUTE_DTR) { DtrScreen(onBack = navController::popBackStack) }
+            composable(ROUTE_OBSERVATIONS) {
+                ObservationsScreen(
+                    onBack = navController::popBackStack,
+                    onNew = { navController.navigate(ROUTE_OBSERVATION_NEW) },
+                )
+            }
+            // Its own route, so the ViewModel — and the observation's idempotency key — lives exactly
+            // as long as the report being written, and the next one starts clean.
+            composable(ROUTE_OBSERVATION_NEW) { NewObservationScreen(onDone = navController::popBackStack) }
             composable("$ROUTE_GUARD_REPORT/{start}/{end}") {
                 GuardReportScreen(onBack = navController::popBackStack)
             }
@@ -259,3 +271,5 @@ private const val ROUTE_HANDBOOK = "reference/handbook"
 private const val ROUTE_DTR = "reports/dtr"
 private const val ROUTE_GUARD_REPORT = "reports/guard-report"
 private const val ROUTE_VISITS = "round/visits"
+private const val ROUTE_OBSERVATIONS = "observations"
+private const val ROUTE_OBSERVATION_NEW = "observations/new"

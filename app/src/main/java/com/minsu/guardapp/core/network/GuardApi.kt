@@ -10,6 +10,7 @@ import com.minsu.guardapp.core.network.dto.EvaluationQuestionDto
 import com.minsu.guardapp.core.network.dto.LoginRequest
 import com.minsu.guardapp.core.network.dto.LoginResponse
 import com.minsu.guardapp.core.network.dto.MobileSettingsDto
+import com.minsu.guardapp.core.network.dto.ObservationDto
 import com.minsu.guardapp.core.network.dto.PagedEnvelope
 import com.minsu.guardapp.core.network.dto.ProfileDto
 import com.minsu.guardapp.core.network.dto.ScheduleDto
@@ -64,6 +65,18 @@ interface GuardApi {
         @Part("device_id") deviceId: RequestBody?,
         @Part selfie: MultipartBody.Part,
     ): Envelope<AttendanceDto>
+
+    /**
+     * Submit one guard observation: a note and one to five photos, each with its own time and fix.
+     *
+     * Multipart, with the photos under bracket-indexed keys — `photos[0][file]`,
+     * `photos[0][latitude]` — which a fixed list of named `@Part`s cannot express for a variable
+     * number of photos, so [com.minsu.guardapp.core.sync.ObservationUploader] builds the parts.
+     * Idempotent on `client_uuid`: 201 for a first submit, 200 for a repeat. Both are success.
+     */
+    @Multipart
+    @POST("observations")
+    suspend fun submitObservation(@Part parts: List<MultipartBody.Part>): Envelope<ObservationDto>
 
     @GET("profile")
     suspend fun profile(): Envelope<ProfileDto>

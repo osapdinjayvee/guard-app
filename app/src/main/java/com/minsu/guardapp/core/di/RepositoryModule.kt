@@ -12,6 +12,10 @@ import com.minsu.guardapp.core.security.LockPreferences
 import com.minsu.guardapp.core.location.LocationProvider
 import com.minsu.guardapp.core.sync.AttendanceUploader
 import com.minsu.guardapp.core.sync.DefaultAttendanceUploader
+import com.minsu.guardapp.core.sync.DefaultObservationUploader
+import com.minsu.guardapp.core.sync.ObservationUploader
+import com.minsu.guardapp.data.DefaultObservationRepository
+import com.minsu.guardapp.domain.repository.ObservationRepository
 import com.minsu.guardapp.core.sync.SyncScheduler
 import com.minsu.guardapp.core.sync.WorkManagerSyncScheduler
 import com.minsu.guardapp.data.DataStoreSettingsCache
@@ -118,6 +122,13 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDocumentRepository(impl: DefaultDocumentRepository): DocumentRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindObservationRepository(impl: DefaultObservationRepository): ObservationRepository
+
+    @Binds
+    abstract fun bindObservationUploader(impl: DefaultObservationUploader): ObservationUploader
 
     @Binds
     @Singleton

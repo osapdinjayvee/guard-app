@@ -11,6 +11,7 @@ import com.minsu.guardapp.core.network.dto.EvaluationQuestionDto
 import com.minsu.guardapp.core.network.dto.LoginRequest
 import com.minsu.guardapp.core.network.dto.LoginResponse
 import com.minsu.guardapp.core.network.dto.MobileSettingsDto
+import com.minsu.guardapp.core.network.dto.ObservationDto
 import com.minsu.guardapp.core.network.dto.PagedEnvelope
 import com.minsu.guardapp.core.network.dto.ProfileDto
 import com.minsu.guardapp.core.network.dto.ScheduleDto
@@ -44,6 +45,9 @@ open class FakeGuardApi : GuardApi {
         deviceId: RequestBody?,
         selfie: MultipartBody.Part,
     ): Envelope<AttendanceDto> = notStubbed("submitAttendance")
+
+    override suspend fun submitObservation(parts: List<MultipartBody.Part>): Envelope<ObservationDto> =
+        notStubbed("submitObservation")
 
     override suspend fun profile(): Envelope<ProfileDto> = notStubbed("profile")
 

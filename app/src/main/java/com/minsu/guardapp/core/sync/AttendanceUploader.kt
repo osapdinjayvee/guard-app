@@ -66,5 +66,5 @@ class DefaultAttendanceUploader @Inject constructor(
     }
 }
 
-private fun iso8601(millis: Long): String =
+internal fun iso8601(millis: Long): String =
     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date(millis))

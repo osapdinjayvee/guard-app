@@ -79,7 +79,7 @@ class SelfieCapture @Inject constructor(
  * sees themselves as in a mirror, but mirroring the saved evidence would also reverse the
  * burned-in text and any lettering in the scene.
  */
-private fun ImageProxy.toUprightBitmap(): Bitmap {
+internal fun ImageProxy.toUprightBitmap(): Bitmap {
     val buffer = planes[0].buffer
     val bytes = ByteArray(buffer.remaining()).also(buffer::get)
     val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)

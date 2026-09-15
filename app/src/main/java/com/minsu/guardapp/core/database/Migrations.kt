@@ -182,6 +182,63 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+/**
+ * Adds guard observations: the report itself, and its photos.
+ *
+ * Additive — two new tables, nothing existing touched — so the unsynced attendance in this database
+ * migrates untouched. The SQL is copied from the exported schema, for the reason given on
+ * [MIGRATION_7_8]: Room refuses to open a database whose tables differ from what it generated.
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `observations` (" +
+                "`id` TEXT NOT NULL, " +
+                "`serverId` INTEGER, " +
+                "`userId` INTEGER NOT NULL, " +
+                "`note` TEXT NOT NULL, " +
+                "`capturedAt` INTEGER NOT NULL, " +
+                "`deviceId` TEXT, " +
+                "`syncStatus` TEXT NOT NULL, " +
+                "`retryCount` INTEGER NOT NULL, " +
+                "`nextAttemptAt` INTEGER, " +
+                "`claimedAt` INTEGER, " +
+                "`lastError` TEXT, " +
+                "`createdAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_observations_syncStatus_nextAttemptAt` " +
+                "ON `observations` (`syncStatus`, `nextAttemptAt`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_observations_capturedAt` ON `observations` (`capturedAt`)"
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_observations_serverId` ON `observations` (`serverId`)"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `observation_photos` (" +
+                "`id` TEXT NOT NULL, " +
+                "`observationId` TEXT NOT NULL, " +
+                "`position` INTEGER NOT NULL, " +
+                "`path` TEXT NOT NULL, " +
+                "`capturedAt` INTEGER NOT NULL, " +
+                "`latitude` REAL NOT NULL, " +
+                "`longitude` REAL NOT NULL, " +
+                "`accuracy` REAL, " +
+                "PRIMARY KEY(`id`), " +
+                "FOREIGN KEY(`observationId`) REFERENCES `observations`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_observation_photos_observationId` " +
+                "ON `observation_photos` (`observationId`)"
+        )
+    }
+}
+
 val GUARD_MIGRATIONS = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -191,4 +248,5 @@ val GUARD_MIGRATIONS = arrayOf(
     MIGRATION_6_7,
     MIGRATION_7_8,
     MIGRATION_8_9,
+    MIGRATION_9_10,
 )

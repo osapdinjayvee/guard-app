@@ -68,6 +68,7 @@ class MockApiInterceptor(
         // 201 on first submit. The mock cannot honour idempotency across process death, so it
         // always reports "created"; the 200-on-repeat path is covered by the sync tests.
         method == "POST" && path == "attendance" -> Route("mock/attendance_created.json", 201)
+        method == "POST" && path == "observations" -> Route("mock/observation_created.json", 201)
         else -> null
     }
 

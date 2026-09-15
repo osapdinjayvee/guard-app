@@ -67,7 +67,7 @@ import java.util.Date
 import java.util.Locale
 
 /** Where Home's tiles lead. The scaffold owns the navigator; Home only says where it wants to go. */
-enum class HomeAction { Scan, Dtr, Reports, Schedule, Checkpoints, Announcements, Handbook, Account }
+enum class HomeAction { Scan, Dtr, Reports, Schedule, Checkpoints, Announcements, Handbook, Account, Observations }
 
 @Composable
 fun HomeRoute(
@@ -429,6 +429,7 @@ private fun QuickActions(onAction: (HomeAction) -> Unit) {
         Action(R.drawable.ic_megaphone, "Announcement", HomeAction.Announcements),
         Action(R.drawable.ic_document, "Handbook", HomeAction.Handbook),
         Action(R.drawable.ic_profile, "Profile", HomeAction.Account),
+        Action(R.drawable.ic_report, "Observation", HomeAction.Observations),
     )
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {

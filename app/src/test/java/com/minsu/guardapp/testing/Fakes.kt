@@ -54,6 +54,9 @@ open class FakeGuardApi : GuardApi {
         deviceId: okhttp3.RequestBody?,
         selfie: okhttp3.MultipartBody.Part,
     ): Envelope<AttendanceDto> = error("submitAttendance not stubbed")
+    override suspend fun submitObservation(
+        parts: List<okhttp3.MultipartBody.Part>,
+    ): Envelope<com.minsu.guardapp.core.network.dto.ObservationDto> = error("submitObservation not stubbed")
 }
 
 class FakeTokenStore(initial: String? = null) : TokenStore {

@@ -1,0 +1,19 @@
+{
+  "data": {
+    "id": 31,
+    "client_uuid": "00000000-0000-4000-8000-000000000000",
+    "status": "new",
+    "note": "Found a broken window near the main gate.",
+    "captured_at": "2026-09-12T13:40:00+08:00",
+    "received_at": "2026-09-12T13:40:03+08:00",
+    "photos": [
+      {
+        "id": 88,
+        "captured_at": "2026-09-12T13:39:50+08:00",
+        "latitude": 13.4115,
+        "longitude": 121.1803,
+        "accuracy": 4.5
+      }
+    ]
+  }
+}

@@ -14,6 +14,8 @@ import com.minsu.guardapp.domain.model.DutyAssignment
 import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.EvaluationQuestion
 import com.minsu.guardapp.domain.model.GuardProfile
+import com.minsu.guardapp.domain.model.Observation
+import com.minsu.guardapp.domain.model.ObservationDraft
 import com.minsu.guardapp.domain.model.SyncOutcome
 import kotlinx.coroutines.flow.Flow
 
@@ -155,6 +157,30 @@ interface AttendanceRepository {
      * @param id the client-generated UUID that is also the idempotency key.
      */
     suspend fun submit(id: String, draft: AttendanceDraft)
+}
+
+/**
+ * Guard observations — something seen on a round, reported with a note and one to five photos.
+ *
+ * Local-first like attendance: [submit] commits to Room and returns; the upload happens behind it.
+ */
+interface ObservationRepository {
+    /** The signed-in guard's observations, newest first, with their sync state. */
+    fun observeRecent(limit: Int = 50): Flow<List<Observation>>
+
+    /** Observations that still owe the server an upload. */
+    fun observeUnsyncedCount(): Flow<Int>
+
+    /**
+     * Commits an observation and its photos to the local database, then requests a sync.
+     *
+     * @param id the client-generated UUID, sent as `client_uuid` and reused on every retry.
+     * @throws IllegalArgumentException if the draft breaks [com.minsu.guardapp.domain.model.ObservationRules].
+     */
+    suspend fun submit(id: String, draft: ObservationDraft)
+
+    /** Re-queues a failed or rejected observation. No-op for any other state. */
+    suspend fun retry(id: String)
 }
 
 interface ProfileRepository {

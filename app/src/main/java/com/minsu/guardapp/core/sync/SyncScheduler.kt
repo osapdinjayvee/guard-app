@@ -9,7 +9,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,23 +50,38 @@ class WorkManagerSyncScheduler @Inject constructor(
     override fun syncNow() = enqueue(ExistingWorkPolicy.REPLACE)
 
     override fun observeSyncing(): Flow<Boolean> =
-        workManager.getWorkInfosForUniqueWorkFlow(UNIQUE_WORK_NAME).map { infos ->
-            infos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+        combine(
+            workManager.getWorkInfosForUniqueWorkFlow(UNIQUE_WORK_NAME),
+            workManager.getWorkInfosForUniqueWorkFlow(OBSERVATION_WORK_NAME),
+        ) { attendance, observations ->
+            (attendance + observations).any {
+                it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
+            }
         }
 
+    /**
+     * Both queues, as two unique works. Separate so that an observation carrying five photos over a
+     * weak signal never sits in front of a Time In waiting to go up.
+     */
     private fun enqueue(policy: ExistingWorkPolicy) {
-        val request = OneTimeWorkRequestBuilder<AttendanceSyncWorker>()
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        workManager.enqueueUniqueWork(UNIQUE_WORK_NAME, policy, request)
+        workManager.enqueueUniqueWork(
+            UNIQUE_WORK_NAME,
+            policy,
+            OneTimeWorkRequestBuilder<AttendanceSyncWorker>().setConstraints(constraints).build(),
+        )
+        workManager.enqueueUniqueWork(
+            OBSERVATION_WORK_NAME,
+            policy,
+            OneTimeWorkRequestBuilder<ObservationSyncWorker>().setConstraints(constraints).build(),
+        )
     }
 
     private companion object {
         const val UNIQUE_WORK_NAME = "attendance-sync"
+        const val OBSERVATION_WORK_NAME = "observation-sync"
     }
 }

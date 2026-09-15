@@ -35,6 +35,8 @@ class LoginViewModelTest {
             return result
         }
         override suspend fun logout() { signedIn.value = false }
+        override suspend fun changePassword(current: String, new: String, confirmation: String) =
+            ApiResult.Success(Unit)
     }
 
     private class FakeAppLock : com.minsu.guardapp.core.security.AppLock {

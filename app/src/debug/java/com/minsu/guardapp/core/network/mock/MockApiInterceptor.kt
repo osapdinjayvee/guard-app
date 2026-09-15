@@ -69,6 +69,7 @@ class MockApiInterceptor(
         // always reports "created"; the 200-on-repeat path is covered by the sync tests.
         method == "POST" && path == "attendance" -> Route("mock/attendance_created.json", 201)
         method == "POST" && path == "observations" -> Route("mock/observation_created.json", 201)
+        method == "POST" && path == "password" -> Route("mock/password_changed.json", 200)
         else -> null
     }
 

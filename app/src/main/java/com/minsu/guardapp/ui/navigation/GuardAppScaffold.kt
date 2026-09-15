@@ -37,6 +37,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.minsu.guardapp.feature.account.AccountScreen
+import com.minsu.guardapp.feature.account.ChangePasswordScreen
 import com.minsu.guardapp.feature.history.HistoryScreen
 import com.minsu.guardapp.feature.home.HomeAction
 import com.minsu.guardapp.feature.home.HomeRoute
@@ -150,7 +151,10 @@ fun GuardAppScaffold(navController: NavHostController = rememberNavController())
                     },
                 )
             }
-            composable(GuardDestination.Account.route) { AccountScreen() }
+            composable(GuardDestination.Account.route) {
+                AccountScreen(onChangePassword = { navController.navigate(ROUTE_CHANGE_PASSWORD) })
+            }
+            composable(ROUTE_CHANGE_PASSWORD) { ChangePasswordScreen(onBack = navController::popBackStack) }
 
             // Reference screens, reached from Home's tiles. Not bottom-bar destinations: they are
             // things a guard looks up, not places they work from.
@@ -273,3 +277,4 @@ private const val ROUTE_GUARD_REPORT = "reports/guard-report"
 private const val ROUTE_VISITS = "round/visits"
 private const val ROUTE_OBSERVATIONS = "observations"
 private const val ROUTE_OBSERVATION_NEW = "observations/new"
+private const val ROUTE_CHANGE_PASSWORD = "account/password"

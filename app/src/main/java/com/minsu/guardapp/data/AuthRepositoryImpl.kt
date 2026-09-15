@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.minsu.guardapp.core.network.ApiErrorMapper
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
+import com.minsu.guardapp.core.network.dto.ChangePasswordRequest
 import com.minsu.guardapp.core.network.dto.LoginRequest
 import com.minsu.guardapp.core.network.map
 import com.minsu.guardapp.core.security.TokenStore
@@ -64,6 +65,17 @@ class DefaultAuthRepository @Inject constructor(
             prefs.remove(PROFILE_USERNAME)
         }
     }
+
+    override suspend fun changePassword(current: String, new: String, confirmation: String): ApiResult<Unit> =
+        errors.call {
+            api.changePassword(
+                ChangePasswordRequest(
+                    currentPassword = current,
+                    password = new,
+                    passwordConfirmation = confirmation,
+                )
+            )
+        }.map { }
 
     private companion object {
         val PROFILE_ID = longPreferencesKey("profile_id")

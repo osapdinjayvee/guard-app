@@ -206,6 +206,13 @@ interface AuthRepository {
 
     /** Clears the local session. Never touches the attendance queue. */
     suspend fun logout()
+
+    /**
+     * Changes the password on the server. Online only. This session survives; the server ends every
+     * other one. A wrong current password comes back as [com.minsu.guardapp.core.network.ApiError.Validation]
+     * keyed `current_password`.
+     */
+    suspend fun changePassword(current: String, new: String, confirmation: String): ApiResult<Unit>
 }
 
 /**

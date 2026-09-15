@@ -56,6 +56,7 @@ import com.minsu.guardapp.ui.components.ScreenTitle
 
 @Composable
 fun AccountScreen(
+    onChangePassword: () -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel(),
     updateViewModel: UpdateViewModel = hiltViewModel(),
 ) {
@@ -142,6 +143,15 @@ fun AccountScreen(
                     subtitle = "Require biometrics or your device PIN to reopen",
                     checked = state.lockEnabled,
                     onCheckedChange = viewModel::setLockEnabled,
+                )
+
+                Divider()
+
+                AccountRow(
+                    iconRes = R.drawable.ic_badge,
+                    title = "Change password",
+                    subtitle = "Set a new password for signing in",
+                    onClick = onChangePassword,
                 )
             }
 

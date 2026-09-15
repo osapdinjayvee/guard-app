@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minsu.guardapp.R
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.ui.components.GuardCard
 import com.minsu.guardapp.ui.components.LocationMiniMap
 import com.minsu.guardapp.ui.components.PermissionGate
@@ -69,10 +70,12 @@ fun SelfieScreen(
     checkpoint: Checkpoint,
     type: AttendanceType,
     onCancel: () -> Unit,
+    /** The duty resolved at the scan. Decides which evaluation questions are asked. */
+    dutyType: DutyType? = null,
     viewModel: SelfieViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(checkpoint.id, type) { viewModel.start(checkpoint, type) }
+    LaunchedEffect(checkpoint.id, type) { viewModel.start(checkpoint, type, dutyType) }
 
     Column(
         Modifier

@@ -49,8 +49,19 @@ sealed interface ScanState {
         val notice: String? = null,
     ) : ScanState
 
-    /** Checkpoint and type settled; the selfie step follows. */
-    data class ReadyToCapture(val checkpoint: Checkpoint, val type: AttendanceType) : ScanState
+    /**
+     * Checkpoint and type settled; the selfie step follows.
+     *
+     * [dutyType] is the duty resolved *here*, at the scan, and it travels with the capture. The
+     * selfie step used to ask the roster again a minute later — and a rover closing a 23:00–07:00
+     * shift who reached the questions at 07:00:30 was, by then, the stationed guard the 07:00 roster
+     * describes, and was asked the stationed questions.
+     */
+    data class ReadyToCapture(
+        val checkpoint: Checkpoint,
+        val type: AttendanceType,
+        val dutyType: DutyType? = null,
+    ) : ScanState
 
     /** A retired checkpoint. Named apart from [Unknown] so the guard knows to try another door. */
     data class Disabled(val checkpoint: Checkpoint) : ScanState
@@ -314,7 +325,7 @@ class ScanViewModel @Inject constructor(
     fun onTypeChosen(type: AttendanceType) {
         val current = _state.value as? ScanState.ChoosingType ?: return
         if (type !in current.allowedTypes) return
-        _state.value = ScanState.ReadyToCapture(current.checkpoint, type)
+        _state.value = ScanState.ReadyToCapture(current.checkpoint, type, _duty.value?.dutyType)
     }
 
     fun scanAgain() {

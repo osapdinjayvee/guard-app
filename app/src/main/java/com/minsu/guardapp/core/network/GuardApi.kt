@@ -2,6 +2,8 @@ package com.minsu.guardapp.core.network
 
 import com.minsu.guardapp.core.network.dto.AnnouncementDto
 import com.minsu.guardapp.core.network.dto.AttendanceDto
+import com.minsu.guardapp.core.network.dto.ChangePasswordRequest
+import com.minsu.guardapp.core.network.dto.MessageDto
 import com.minsu.guardapp.core.network.dto.CheckpointDto
 import com.minsu.guardapp.core.network.dto.DocumentDto
 import com.minsu.guardapp.core.network.dto.DutyDto
@@ -109,7 +111,21 @@ interface GuardApi {
      * is a shift they cannot clock out of.
      */
     @GET("evaluation-questions")
-    suspend fun evaluationQuestions(): Envelope<List<EvaluationQuestionDto>>
+    suspend fun evaluationQuestions(
+        /**
+         * `roving` or `stationed`: the duty of the shift being opened or closed. Sent because the
+         * server's clock cannot know it at a shift boundary — a rover closing a night shift at 07:00
+         * is not the stationed guard the 07:00 roster describes. Null lets the server decide.
+         */
+        @Query("guard_type") guardType: String? = null,
+    ): Envelope<List<EvaluationQuestionDto>>
+
+    /**
+     * Change the signed-in guard's password. The server keeps this session and revokes every other
+     * one. A wrong current password is a 422 with `details.current_password`.
+     */
+    @POST("password")
+    suspend fun changePassword(@Body request: ChangePasswordRequest): Envelope<MessageDto>
 
     @GET("announcements")
     suspend fun announcements(): Envelope<List<AnnouncementDto>>

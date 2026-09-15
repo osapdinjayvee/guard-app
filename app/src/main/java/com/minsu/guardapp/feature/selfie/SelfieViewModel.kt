@@ -13,6 +13,7 @@ import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.domain.model.AttendanceType
 import com.minsu.guardapp.domain.model.Checkpoint
 import com.minsu.guardapp.domain.model.Duty
+import com.minsu.guardapp.domain.model.DutyType
 import com.minsu.guardapp.domain.model.EvaluationAnswer
 import com.minsu.guardapp.domain.model.EvaluationQuestion
 import com.minsu.guardapp.domain.model.GpsFailurePolicy
@@ -250,7 +251,13 @@ class SelfieViewModel @Inject constructor(
      */
     private val sessionJobs = mutableListOf<Job>()
 
-    fun start(checkpoint: Checkpoint, type: AttendanceType) {
+    /**
+     * @param scannedDuty the duty the scanner resolved for this capture. Used for the questions in
+     *   preference to asking the roster again: by the time a guard reaches this screen the clock may
+     *   have crossed into the next shift, and a rover closing a night shift at 07:00 would otherwise be
+     *   asked the questions of the stationed shift that began at 07:00. Null falls back to the roster.
+     */
+    fun start(checkpoint: Checkpoint, type: AttendanceType, scannedDuty: DutyType? = null) {
         val current = _uiState.value
         // The same attendance, re-entered by a recomposition rather than a new scan. Leave the
         // in-progress capture — its photo, its half-answered evaluation — untouched.
@@ -271,7 +278,7 @@ class SelfieViewModel @Inject constructor(
 
         sessionJobs += viewModelScope.launch {
             val settingsNow = settings.current()
-            val dutyType = schedule.currentDuty()?.dutyType
+            val dutyType = scannedDuty ?: schedule.currentDuty()?.dutyType
             _uiState.update {
                 it.copy(
                     guardName = profiles.observe().first()?.name.orEmpty(),
@@ -292,7 +299,7 @@ class SelfieViewModel @Inject constructor(
             val captureType = type ?: return@launch
             if (captureType == AttendanceType.CHECKPOINT) return@launch
 
-            val dutyType = schedule.currentDuty()?.dutyType
+            val dutyType = scannedDuty ?: schedule.currentDuty()?.dutyType
 
             /*
              * Refetched when the *duty* has changed, not only when the cache is empty.

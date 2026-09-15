@@ -184,7 +184,10 @@ class ScanViewModelTest {
 
         vm.onTypeChosen(AttendanceType.TIME_OUT)
 
-        assertEquals(ScanState.ReadyToCapture(gateA, AttendanceType.TIME_OUT), vm.state.value)
+        assertEquals(
+            ScanState.ReadyToCapture(gateA, AttendanceType.TIME_OUT, com.minsu.guardapp.domain.model.DutyType.ROVING),
+            vm.state.value,
+        )
     }
 
     /** A type without a resolved checkpoint is meaningless and must not be reachable. */

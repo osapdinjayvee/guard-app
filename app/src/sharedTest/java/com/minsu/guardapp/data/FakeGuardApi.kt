@@ -59,8 +59,12 @@ open class FakeGuardApi : GuardApi {
 
     override suspend fun duties(): Envelope<DutyDto> = notStubbed("duties")
 
-    override suspend fun evaluationQuestions(): Envelope<List<EvaluationQuestionDto>> =
+    override suspend fun evaluationQuestions(guardType: String?): Envelope<List<EvaluationQuestionDto>> =
         notStubbed("evaluationQuestions")
+
+    override suspend fun changePassword(
+        request: com.minsu.guardapp.core.network.dto.ChangePasswordRequest,
+    ): Envelope<com.minsu.guardapp.core.network.dto.MessageDto> = notStubbed("changePassword")
 
     override suspend fun announcements(): Envelope<List<AnnouncementDto>> = notStubbed("announcements")
 

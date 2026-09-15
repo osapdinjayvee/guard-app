@@ -205,8 +205,12 @@ class EvaluationRepositoryTest {
      */
     /** Answers the question list, so a refresh can actually succeed and record what it fetched. */
     private class ServingApi : FakeGuardApi() {
-        override suspend fun evaluationQuestions(): Envelope<List<EvaluationQuestionDto>> =
-            Envelope(emptyList())
+        var askedFor: String? = null
+
+        override suspend fun evaluationQuestions(guardType: String?): Envelope<List<EvaluationQuestionDto>> {
+            askedFor = guardType
+            return Envelope(emptyList())
+        }
     }
 
     @Test

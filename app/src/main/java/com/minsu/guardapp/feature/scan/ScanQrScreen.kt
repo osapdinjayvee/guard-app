@@ -83,6 +83,7 @@ fun ScanQrScreen(viewModel: ScanViewModel = hiltViewModel()) {
             checkpoint = ready.checkpoint,
             type = ready.type,
             onCancel = viewModel::scanAgain,
+            dutyType = ready.dutyType,
         )
         return
     }

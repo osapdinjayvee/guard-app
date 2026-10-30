@@ -298,4 +298,5 @@ interface EvaluationRepository {
     suspend fun isStaleFor(duty: DutyType?): Boolean
 
     suspend fun refresh(duty: DutyType?): ApiResult<Unit>
+    suspend fun refresh(type: AttendanceType, duty: DutyType?): ApiResult<Unit> = refresh(duty)
 }

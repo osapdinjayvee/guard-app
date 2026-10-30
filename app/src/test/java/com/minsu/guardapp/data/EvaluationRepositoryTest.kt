@@ -206,11 +206,32 @@ class EvaluationRepositoryTest {
     /** Answers the question list, so a refresh can actually succeed and record what it fetched. */
     private class ServingApi : FakeGuardApi() {
         var askedFor: String? = null
+        var askedType: String? = null
 
-        override suspend fun evaluationQuestions(guardType: String?): Envelope<List<EvaluationQuestionDto>> {
+        override suspend fun evaluationQuestions(type: String?, guardType: String?): Envelope<List<EvaluationQuestionDto>> {
             askedFor = guardType
+            askedType = type
             return Envelope(emptyList())
         }
+    }
+
+    @Test
+    fun `refresh requests the attendance type from the backend`() = runTest {
+        val api = ServingApi()
+        val repository = DefaultEvaluationRepository(
+            dao = FakeDao(mutableListOf()),
+            api = api,
+            errors = ApiErrorMapper(Moshi.Builder().build()),
+            dataStore = FakeDataStore(),
+            clock = Clock { 1_000L },
+        )
+
+        repository.refresh(AttendanceType.TIME_IN, DutyType.STATIONED)
+        assertEquals("time_in", api.askedType)
+        assertEquals("stationed", api.askedFor)
+
+        repository.refresh(AttendanceType.TIME_OUT, DutyType.STATIONED)
+        assertEquals("time_out", api.askedType)
     }
 
     @Test

@@ -82,6 +82,9 @@ data class SelfieUiState(
      * wrong one way and the guard is stranded; guess wrong the other and the evidence is lost.
      */
     val questionsKnownEmpty: Boolean = false,
+    val isLoadingQuestions: Boolean = false,
+    val questionError: String? = null,
+    val evaluationDutyType: DutyType? = null,
     /** True once the photo is accepted and the guard has moved on to the questions. */
     val onEvaluationStep: Boolean = false,
     val isSubmitting: Boolean = false,
@@ -123,6 +126,8 @@ data class SelfieUiState(
         get() = questions.firstOrNull { it.id !in answers }
 
     val answeredCount: Int get() = questions.count { it.id in answers }
+    val unansweredQuestions: List<EvaluationQuestion>
+        get() = questions.filter { it.id !in answers }
 
     /**
      * Every question, or none.
@@ -134,6 +139,7 @@ data class SelfieUiState(
      */
     val evaluationComplete: Boolean
         get() = when {
+            isLoadingQuestions || questionError != null -> false
             !needsEvaluation -> true
             // Genuinely nothing to ask: the office retired every question, or asks none at this end
             // of the shift. Not a reason to leave a guard unable to open or close one.
@@ -274,6 +280,8 @@ class SelfieViewModel @Inject constructor(
             checkpoint = checkpoint,
             type = type,
             nowMillis = clock.nowMillis(),
+            isLoadingQuestions = type == AttendanceType.TIME_IN || type == AttendanceType.TIME_OUT,
+            evaluationDutyType = scannedDuty,
         )
 
         sessionJobs += viewModelScope.launch {
@@ -284,9 +292,7 @@ class SelfieViewModel @Inject constructor(
                     guardName = profiles.observe().first()?.name.orEmpty(),
                     settings = settingsNow,
                     duty = duties.activeDuty(),
-                    // Whichever set belongs to this end of the shift, for this duty. Read from the
-                    // cache, so the questions are there at a perimeter post with no signal.
-                    questions = type?.let { evaluations.questions(it, dutyType) }.orEmpty(),
+                    evaluationDutyType = dutyType,
                     nowMillis = clock.nowMillis(),
                 )
             }
@@ -311,18 +317,15 @@ class SelfieViewModel @Inject constructor(
              * completeness again on submission, answers the Time Out with a 422. The sync queue
              * treats that as permanent.
              */
-            val stale = evaluations.isStaleFor(dutyType)
-            if (!stale && evaluations.questions(captureType, dutyType).isNotEmpty()) return@launch
-
-            // A successful refresh that comes back empty is an *answer*: this campus asks nothing
-            // at this end of the shift. A failed one tells us only that we still do not know.
-            val refreshed = evaluations.refresh(dutyType)
+            val refreshed = evaluations.refresh(captureType, dutyType)
             val questions = evaluations.questions(captureType, dutyType)
 
             _uiState.update {
                 it.copy(
-                    questions = questions,
+                    questions = if (refreshed is ApiResult.Success) questions else emptyList(),
                     questionsKnownEmpty = refreshed is ApiResult.Success && questions.isEmpty(),
+                    isLoadingQuestions = false,
+                    questionError = (refreshed as? ApiResult.Failure)?.error?.let { "Could not load questions. Please retry." },
                 )
             }
         }
@@ -376,6 +379,25 @@ class SelfieViewModel @Inject constructor(
      */
     fun answer(questionId: Long, answer: Boolean) = _uiState.update {
         it.copy(answers = it.answers + (questionId to answer))
+    }
+
+    fun retryQuestions() {
+        val state = _uiState.value
+        val type = state.type ?: return
+        if (!state.needsEvaluation) return
+        _uiState.update { it.copy(isLoadingQuestions = true, questionError = null, questions = emptyList(), questionsKnownEmpty = false) }
+        viewModelScope.launch {
+            val result = evaluations.refresh(type, state.evaluationDutyType)
+            val questions = evaluations.questions(type, state.evaluationDutyType)
+            _uiState.update {
+                it.copy(
+                    questions = if (result is ApiResult.Success) questions else emptyList(),
+                    questionsKnownEmpty = result is ApiResult.Success && questions.isEmpty(),
+                    isLoadingQuestions = false,
+                    questionError = (result as? ApiResult.Failure)?.error?.let { "Could not load questions. Please retry." },
+                )
+            }
+        }
     }
 
     /** Un-answer the last question, so a mis-tap is one tap to fix rather than a restart. */
@@ -440,7 +462,11 @@ class SelfieViewModel @Inject constructor(
                 onSuccess = { _uiState.update { it.copy(isSubmitting = false, submitted = true) } },
                 onFailure = { error ->
                     _uiState.update {
-                        it.copy(isSubmitting = false, error = error.message ?: "Could not save the record.")
+                        it.copy(
+                            isSubmitting = false,
+                            onEvaluationStep = it.needsEvaluation,
+                            error = error.message ?: "Could not save the record.",
+                        )
                     }
                 },
             )

@@ -46,6 +46,7 @@ class DefaultEvaluationRepository @Inject constructor(
                 )
             }
             .filter { it.timing.appliesTo(type) && it.asksOf.appliesTo(duty) }
+            .distinctBy { it.id }
 
     /**
      * Whether the cached set belongs to a different duty than the one being worked.
@@ -76,7 +77,7 @@ class DefaultEvaluationRepository @Inject constructor(
         // The duty is named to the server rather than left for it to work out. Its clock picks the
         // shift running *now*, and at 07:00 that is the morning shift — not the night shift a rover
         // is closing, whose questions are the ones they must answer.
-        errors.call { api.evaluationQuestions(guardType = duty.guardTypeParam()).data }
+        errors.call { api.evaluationQuestions(type = "time_out", guardType = duty.guardTypeParam()).data }
             .also { result ->
                 if (result is ApiResult.Success) {
                     val now = clock.nowMillis()
@@ -103,6 +104,26 @@ class DefaultEvaluationRepository @Inject constructor(
             }
             .map { }
 
+    override suspend fun refresh(type: AttendanceType, duty: DutyType?): ApiResult<Unit> =
+        errors.call { api.evaluationQuestions(type = type.wireName, guardType = duty.guardTypeParam()).data }
+            .also { result ->
+                if (result is ApiResult.Success) {
+                    val now = clock.nowMillis()
+                    dao.clear()
+                    dao.upsertAll(result.value.map {
+                        EvaluationQuestionEntity(
+                            id = it.id,
+                            question = it.question,
+                            timing = EvaluationTiming.fromWire(it.type).name,
+                            targetGuardType = GuardTarget.fromWire(it.targetGuardType).name,
+                            sortOrder = it.sortOrder,
+                            updatedAt = now,
+                        )
+                    })
+                }
+            }
+            .map { }
+
     private fun DutyType?.guardTypeParam(): String? = when (this) {
         DutyType.ROVING -> "roving"
         DutyType.STATIONED -> "stationed"
@@ -113,3 +134,10 @@ class DefaultEvaluationRepository @Inject constructor(
         val FETCHED_FOR_DUTY = stringPreferencesKey("evaluation_questions_fetched_for_duty")
     }
 }
+
+private val AttendanceType.wireName: String
+    get() = when (this) {
+        AttendanceType.TIME_IN -> "time_in"
+        AttendanceType.TIME_OUT -> "time_out"
+        AttendanceType.CHECKPOINT -> "checkpoint"
+    }

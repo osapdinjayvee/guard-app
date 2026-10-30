@@ -112,6 +112,7 @@ interface GuardApi {
      */
     @GET("evaluation-questions")
     suspend fun evaluationQuestions(
+        @Query("type") type: String? = null,
         /**
          * `roving` or `stationed`: the duty of the shift being opened or closed. Sent because the
          * server's clock cannot know it at a shift boundary — a rover closing a night shift at 07:00

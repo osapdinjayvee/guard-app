@@ -32,7 +32,7 @@ open class FakeGuardApi : GuardApi {
     override suspend fun checkpoint(code: String): Envelope<CheckpointDto> = error("checkpoint not stubbed")
     override suspend fun duties(): Envelope<DutyDto> = error("duties not stubbed")
     override suspend fun schedule(): Envelope<ScheduleDto> = error("schedule not stubbed")
-    override suspend fun evaluationQuestions(guardType: String?): Envelope<List<EvaluationQuestionDto>> =
+    override suspend fun evaluationQuestions(type: String?, guardType: String?): Envelope<List<EvaluationQuestionDto>> =
         error("evaluationQuestions not stubbed")
     override suspend fun changePassword(
         request: com.minsu.guardapp.core.network.dto.ChangePasswordRequest,

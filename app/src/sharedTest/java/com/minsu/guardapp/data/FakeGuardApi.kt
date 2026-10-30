@@ -59,7 +59,7 @@ open class FakeGuardApi : GuardApi {
 
     override suspend fun duties(): Envelope<DutyDto> = notStubbed("duties")
 
-    override suspend fun evaluationQuestions(guardType: String?): Envelope<List<EvaluationQuestionDto>> =
+    override suspend fun evaluationQuestions(type: String?, guardType: String?): Envelope<List<EvaluationQuestionDto>> =
         notStubbed("evaluationQuestions")
 
     override suspend fun changePassword(

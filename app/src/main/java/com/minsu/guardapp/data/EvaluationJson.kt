@@ -24,17 +24,25 @@ class EvaluationJson @Inject constructor(moshi: Moshi) {
     private val adapter = moshi.adapter<List<EvaluationAnswerDto>>(
         Types.newParameterizedType(List::class.java, EvaluationAnswerDto::class.java)
     )
+    private val requestAdapter = moshi.adapter(EvaluationRequestDto::class.java)
 
     fun encode(answers: List<EvaluationAnswer>): String =
-        adapter.toJson(answers.map { EvaluationAnswerDto(it.questionId, it.answer) })
+        requestAdapter.toJson(EvaluationRequestDto(answers.map { EvaluationAnswerDto(it.questionId, it.answer) }))
 
     /** Malformed JSON yields no answers rather than an exception: a bad row must not stall the queue. */
     fun decode(json: String?): List<EvaluationAnswer> {
         if (json.isNullOrBlank()) return emptyList()
 
-        return runCatching { adapter.fromJson(json) }
+        val answers = runCatching { requestAdapter.fromJson(json)?.evaluations }
             .getOrNull()
+            ?: runCatching { adapter.fromJson(json) }.getOrNull()
             .orEmpty()
+        return answers
             .map { EvaluationAnswer(it.questionId, it.answer) }
     }
 }
+
+@com.squareup.moshi.JsonClass(generateAdapter = true)
+internal data class EvaluationRequestDto(
+    @com.squareup.moshi.Json(name = "evaluations") val evaluations: List<EvaluationAnswerDto>,
+)

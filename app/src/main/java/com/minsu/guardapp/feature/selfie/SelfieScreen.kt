@@ -111,6 +111,7 @@ fun SelfieScreen(
                     onBack = viewModel::previousQuestion,
                     onBackToPhoto = viewModel::backToPhoto,
                     onSubmit = viewModel::submit,
+                    onRetryQuestions = viewModel::retryQuestions,
                 )
 
                 captured != null -> CapturedPreview(
@@ -375,6 +376,7 @@ private fun ShiftEvaluation(
     onBack: () -> Unit,
     onBackToPhoto: () -> Unit,
     onSubmit: () -> Unit,
+    onRetryQuestions: () -> Unit,
 ) {
     val question = state.currentQuestion
 
@@ -391,7 +393,19 @@ private fun ShiftEvaluation(
          * was to decide that no questions meant no evaluation, submit, and let the server reject the
          * record hours later. The guard would have had a shift they could not close and no idea why.
          */
-        if (state.missingQuestions) {
+        if (state.isLoadingQuestions) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(12.dp))
+            Text("Loading self-evaluation questions…")
+            Spacer(Modifier.height(16.dp))
+        } else if (state.questionError != null) {
+            GuardCard {
+                Text(state.questionError, color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = onRetryQuestions) { Text("Retry") }
+            }
+            Spacer(Modifier.height(16.dp))
+        } else if (state.missingQuestions) {
             GuardCard {
                 Text(
                     "Shift questions not downloaded",
@@ -454,6 +468,16 @@ private fun ShiftEvaluation(
             }
 
             Spacer(Modifier.height(20.dp))
+            state.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                if (state.unansweredQuestions.isNotEmpty()) {
+                    Text(
+                        "Still unanswered: " + state.unansweredQuestions.joinToString { "#${it.id}" },
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 // Yes and No are equals. Styling one as the primary action would tell a tired guard
                 // which answer the app expects, and they would give it.
@@ -506,6 +530,13 @@ private fun ShiftEvaluation(
             state.error?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            if (state.error != null && state.unansweredQuestions.isNotEmpty()) {
+                Text(
+                    "Still unanswered: " + state.unansweredQuestions.joinToString { "#${it.id}" },
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
 
             Spacer(Modifier.height(20.dp))

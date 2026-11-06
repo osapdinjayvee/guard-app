@@ -38,6 +38,9 @@ class DefaultAttendanceUploader @Inject constructor(
         )
 
         api.submitAttendance(
+            // This uploader is reached only by AttendanceSyncWorker. Live capture does not call
+            // this path, so it must not receive the offline-sync marker.
+            offlineSync = "true",
             clientUuid = record.id.text(),
             checkpointId = record.checkpointId.toString().text(),
             // The wire format is snake_case (`time_in`), not the enum's own name.

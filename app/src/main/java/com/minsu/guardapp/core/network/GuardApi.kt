@@ -20,6 +20,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -50,6 +51,8 @@ interface GuardApi {
     @Multipart
     @POST("attendance")
     suspend fun submitAttendance(
+        /** Present only when the record is being drained from the durable offline queue. */
+        @Header("X-Offline-Sync") offlineSync: String? = null,
         @Part("client_uuid") clientUuid: RequestBody,
         @Part("qr_checkpoint_id") checkpointId: RequestBody,
         @Part("attendance_type") attendanceType: RequestBody,

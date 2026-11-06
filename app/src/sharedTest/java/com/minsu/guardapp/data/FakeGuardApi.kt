@@ -32,6 +32,7 @@ open class FakeGuardApi : GuardApi {
     override suspend fun logout(): Unit = notStubbed("logout")
 
     override suspend fun submitAttendance(
+        offlineSync: String?,
         clientUuid: RequestBody,
         checkpointId: RequestBody,
         attendanceType: RequestBody,

@@ -44,6 +44,7 @@ open class FakeGuardApi : GuardApi {
     override suspend fun document(identifier: String): Envelope<DocumentDto> =
         error("document not stubbed")
     override suspend fun submitAttendance(
+        offlineSync: String?,
         clientUuid: okhttp3.RequestBody,
         checkpointId: okhttp3.RequestBody,
         attendanceType: okhttp3.RequestBody,

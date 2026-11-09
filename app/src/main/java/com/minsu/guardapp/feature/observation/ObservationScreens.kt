@@ -228,6 +228,12 @@ private fun ObservationForm(state: ObservationUiState, viewModel: ObservationVie
             color = MaterialTheme.colorScheme.onSurface,
         )
 
+        // No storage permission: the system photo picker hands over only what the guard chooses.
+        // Capped at the full five; the ViewModel keeps only as many as still fit.
+        val pickFromGallery = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(ObservationRules.MAX_PHOTOS),
+        ) { uris -> viewModel.addFromGallery(uris) }
+
         if (state.photos.isNotEmpty()) {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -236,6 +242,13 @@ private fun ObservationForm(state: ObservationUiState, viewModel: ObservationVie
                 state.photos.forEachIndexed { index, photo ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Thumbnail(photo.file.absolutePath)
+                        if (photo.fromGallery) {
+                            Text(
+                                "From gallery",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         TextButton(onClick = { viewModel.removePhoto(index) }, enabled = !state.isSubmitting) {
                             Text("Remove", color = MaterialTheme.colorScheme.error)
                         }
@@ -250,16 +263,43 @@ private fun ObservationForm(state: ObservationUiState, viewModel: ObservationVie
             )
         }
 
-        OutlinedButton(
-            onClick = viewModel::openCamera,
-            enabled = state.canAddPhoto,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(
-                if (state.photos.size >= ObservationRules.MAX_PHOTOS) "Photo limit reached" else "Add photo",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = viewModel::openCamera,
+                enabled = state.canAddPhoto,
+                modifier = Modifier.weight(1f).height(52.dp),
+            ) {
+                Text("Take photo", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+                onClick = {
+                    pickFromGallery.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly,
+                        ),
+                    )
+                },
+                // A gallery photo is stamped with where the guard is when attaching it, so it waits
+                // for the same fix the camera does.
+                enabled = state.canAddPhoto && state.gpsBlock == null,
+                modifier = Modifier.weight(1f).height(52.dp),
+            ) {
+                Text("From gallery", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        when {
+            state.photos.size >= ObservationRules.MAX_PHOTOS -> Text(
+                "Photo limit reached.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            state.isImporting -> Text(
+                "Attaching photos?",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            else -> state.gpsBlock?.let { GpsNotice(it, state) }
         }
 
         state.error?.let {

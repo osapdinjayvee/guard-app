@@ -1,5 +1,6 @@
 package com.minsu.guardapp.feature.observation
 
+import android.net.Uri
 import androidx.camera.core.ImageCapture
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -38,11 +39,14 @@ import javax.inject.Inject
 /** Why the camera cannot take a photo yet, or null when it can. */
 enum class ObservationGpsBlock { WAITING, NO_FIX, TOO_INACCURATE }
 
-/** A photo taken for the observation being written, with the fix burned into it. */
+/** A photo for the observation being written, with the fix burned into it. */
 data class CapturedPhoto(
     val file: File,
+    /** When it was taken: the shutter for a camera photo, the file's own date for a gallery one. */
     val capturedAtMillis: Long,
+    /** Where the guard was when it was taken ? or, for a gallery photo, when it was attached. */
     val fix: LocationFix,
+    val fromGallery: Boolean = false,
 )
 
 data class ObservationUiState(
@@ -55,12 +59,31 @@ data class ObservationUiState(
     val photos: List<CapturedPhoto> = emptyList(),
     val isCameraOpen: Boolean = false,
     val isCapturing: Boolean = false,
+    /** Gallery photos are being decoded and stamped. */
+    val isImporting: Boolean = false,
     val isSubmitting: Boolean = false,
     val submitted: Boolean = false,
     val error: String? = null,
 ) {
     val canAddPhoto: Boolean
-        get() = photos.size < ObservationRules.MAX_PHOTOS && !isSubmitting
+        get() = photos.size < ObservationRules.MAX_PHOTOS && !isSubmitting && !isImporting
+
+    /**
+     * What is burned into a gallery photo.
+     *
+     * Says so, first. A photo from the gallery could have been taken anywhere and at any time; the
+     * location on it is where the guard stood when they attached it, and the stamp must not let an
+     * admin read it as where the picture was taken.
+     */
+    fun galleryLines(takenAtMillis: Long?, attachedAtMillis: Long, at: LocationFix): List<String> = listOf(
+        guardName.ifBlank { "?" },
+        "FROM GALLERY",
+        "Taken ${takenAtMillis?.let(::dateTime) ?: "unknown"}",
+        "Attached ${dateTime(attachedAtMillis)}",
+        "Lat ${"%.6f".format(at.latitude)}  Lng ${"%.6f".format(at.longitude)} (when attached)",
+        "Accuracy ?${"%.0f".format(at.accuracyMetres)} m",
+        "OBSERVATION",
+    )
 
     /**
      * Every photo needs coordinates — the server requires them — so no fix means no photo, whatever
@@ -209,6 +232,70 @@ class ObservationViewModel @Inject constructor(
                     _uiState.update { it.copy(isCapturing = false, error = error.message ?: "Capture failed.") }
                 },
             )
+        }
+    }
+
+    /**
+     * Attach photos the guard picked from their gallery.
+     *
+     * A fix is required first, as it is for the camera: the server wants coordinates on every photo,
+     * and the photo picker strips the location from the files it hands over. What is stamped is where
+     * the guard is now, labelled as such.
+     */
+    fun addFromGallery(uris: List<Uri>) {
+        val state = _uiState.value
+        if (uris.isEmpty() || !state.canAddPhoto) return
+
+        val fix = state.fix
+        if (fix == null || state.gpsBlock != null) {
+            _uiState.update {
+                it.copy(error = "Wait for a GPS fix before attaching photos ? each one is stamped with your location.")
+            }
+            return
+        }
+
+        val room = ObservationRules.MAX_PHOTOS - state.photos.size
+        val chosen = uris.take(room)
+
+        _uiState.update {
+            it.copy(
+                isImporting = true,
+                error = if (uris.size > room) "Only $room more photo(s) fit, so the rest were left out." else null,
+            )
+        }
+
+        viewModelScope.launch {
+            val attachedAt = clock.nowMillis()
+            val snapshot = _uiState.value
+            val added = mutableListOf<CapturedPhoto>()
+            var failed = 0
+
+            chosen.forEach { uri ->
+                runCatching {
+                    photoCapture.importFromGallery(
+                        uri = uri,
+                        name = "${observationId}_${UUID.randomUUID()}",
+                        lines = { takenAt -> snapshot.galleryLines(takenAt, attachedAt, fix) },
+                        maxDimension = snapshot.settings.imageMaxDimensionPx,
+                        quality = snapshot.settings.imageQuality,
+                    )
+                }.onSuccess { imported ->
+                    added += CapturedPhoto(
+                        file = imported.file,
+                        capturedAtMillis = imported.takenAtMillis ?: attachedAt,
+                        fix = fix,
+                        fromGallery = true,
+                    )
+                }.onFailure { failed++ }
+            }
+
+            _uiState.update {
+                it.copy(
+                    isImporting = false,
+                    photos = (it.photos + added).take(ObservationRules.MAX_PHOTOS),
+                    error = if (failed > 0) "$failed photo(s) could not be read." else it.error,
+                )
+            }
         }
     }
 

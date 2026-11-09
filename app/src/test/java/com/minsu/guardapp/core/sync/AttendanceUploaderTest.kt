@@ -5,6 +5,7 @@ import com.minsu.guardapp.core.database.AttendanceType
 import com.minsu.guardapp.core.network.ApiErrorMapper
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
+import com.minsu.guardapp.data.EvaluationJson
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.test.runTest
 import okhttp3.MultipartBody
@@ -42,7 +43,7 @@ class AttendanceUploaderTest {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(GuardApi::class.java)
-        uploader = DefaultAttendanceUploader(api, ApiErrorMapper(moshi))
+        uploader = DefaultAttendanceUploader(api, ApiErrorMapper(moshi), EvaluationJson(moshi))
     }
 
     @After
@@ -53,7 +54,15 @@ class AttendanceUploaderTest {
         server.enqueue(MockResponse().setResponseCode(201).setBody(responseBody()))
 
         val capturedAt = 1_783_663_331_000L
-        val result = uploader.upload(record(capturedAt = capturedAt, latitude = null, longitude = null, accuracy = null))
+        val result = uploader.upload(
+            record(
+                capturedAt = capturedAt,
+                latitude = null,
+                longitude = null,
+                accuracy = null,
+                evaluationsJson = "{\"evaluations\":[{\"question_id\":123,\"answer\":true}]}",
+            )
+        )
 
         assertTrue(result is ApiResult.Success)
         val request = server.takeRequest()
@@ -65,6 +74,7 @@ class AttendanceUploaderTest {
         assertFalse("missing GPS is not sent as a fake zero", body.contains("name=\"latitude\""))
         assertFalse("missing GPS is not sent as a fake zero", body.contains("name=\"longitude\""))
         assertFalse("missing GPS is not sent as a fake zero", body.contains("name=\"accuracy\""))
+        assertTrue(body.contains("[{\"question_id\":123,\"answer\":true}]"))
     }
 
     @Test
@@ -93,7 +103,13 @@ class AttendanceUploaderTest {
         assertEquals(null, server.takeRequest().getHeader("X-Offline-Sync"))
     }
 
-    private fun record(capturedAt: Long, latitude: Double?, longitude: Double?, accuracy: Float?) =
+    private fun record(
+        capturedAt: Long,
+        latitude: Double?,
+        longitude: Double?,
+        accuracy: Float?,
+        evaluationsJson: String? = null,
+    ) =
         AttendanceEntity(
             id = "offline-id",
             userId = 7,
@@ -110,6 +126,7 @@ class AttendanceUploaderTest {
             deviceId = null,
             createdAt = capturedAt,
             updatedAt = capturedAt,
+            evaluationsJson = evaluationsJson,
         )
 
     private fun responseBody() =

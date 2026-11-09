@@ -51,7 +51,7 @@ class DefaultObservationUploader @Inject constructor(
             }
         }
 
-        api.submitObservation(parts).data
+        api.submitObservation(offlineSync = "true", parts = parts).data
     }
 
     private fun field(name: String, value: String) = MultipartBody.Part.createFormData(name, value)

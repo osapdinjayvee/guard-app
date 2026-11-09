@@ -62,6 +62,7 @@ class ObservationUploaderTest {
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("/api/observations", request.path)
+        assertEquals("true", request.getHeader("X-Offline-Sync"))
         assertTrue(request.getHeader("Content-Type")!!.startsWith("multipart/form-data"))
 
         val body = request.body.readUtf8()

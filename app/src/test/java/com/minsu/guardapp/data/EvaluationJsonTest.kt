@@ -18,7 +18,7 @@ class EvaluationJsonTest {
         )
 
         assertEquals(
-            "{\"evaluations\":[{\"question_id\":123,\"answer\":true},{\"question_id\":456,\"answer\":false}]}",
+            "[{\"question_id\":123,\"answer\":true},{\"question_id\":456,\"answer\":false}]",
             encoded,
         )
     }

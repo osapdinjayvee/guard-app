@@ -5,6 +5,7 @@ import com.minsu.guardapp.core.network.ApiErrorMapper
 import com.minsu.guardapp.core.network.ApiResult
 import com.minsu.guardapp.core.network.GuardApi
 import com.minsu.guardapp.core.network.dto.AttendanceDto
+import com.minsu.guardapp.data.EvaluationJson
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -27,6 +28,7 @@ interface AttendanceUploader {
 class DefaultAttendanceUploader @Inject constructor(
     private val api: GuardApi,
     private val errors: ApiErrorMapper,
+    private val evaluationJson: EvaluationJson,
 ) : AttendanceUploader {
 
     override suspend fun upload(record: AttendanceEntity): ApiResult<AttendanceDto> = errors.call {
@@ -55,7 +57,10 @@ class DefaultAttendanceUploader @Inject constructor(
             // The exact string written at capture, not one re-derived now. The answers were given on
             // a phone with no signal and are being sent hours later; anything that rebuilt the
             // payload here would be a second chance to disagree with what the guard actually said.
-            evaluations = record.evaluationsJson?.text(),
+            evaluations = record.evaluationsJson?.let { raw ->
+                val answers = evaluationJson.decode(raw)
+                if (answers.isNotEmpty()) evaluationJson.encode(answers) else raw
+            }?.text(),
             deviceId = record.deviceId?.text(),
             selfie = selfiePart,
         ).data

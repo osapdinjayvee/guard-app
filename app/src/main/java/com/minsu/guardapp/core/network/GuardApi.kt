@@ -81,7 +81,11 @@ interface GuardApi {
      */
     @Multipart
     @POST("observations")
-    suspend fun submitObservation(@Part parts: List<MultipartBody.Part>): Envelope<ObservationDto>
+    suspend fun submitObservation(
+        /** Present only when the record is being drained from the durable offline queue. */
+        @Header("X-Offline-Sync") offlineSync: String? = null,
+        @Part parts: List<MultipartBody.Part>,
+    ): Envelope<ObservationDto>
 
     @GET("profile")
     suspend fun profile(): Envelope<ProfileDto>

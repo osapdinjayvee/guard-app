@@ -47,7 +47,10 @@ open class FakeGuardApi : GuardApi {
         selfie: MultipartBody.Part,
     ): Envelope<AttendanceDto> = notStubbed("submitAttendance")
 
-    override suspend fun submitObservation(parts: List<MultipartBody.Part>): Envelope<ObservationDto> =
+    override suspend fun submitObservation(
+        offlineSync: String?,
+        parts: List<MultipartBody.Part>,
+    ): Envelope<ObservationDto> =
         notStubbed("submitObservation")
 
     override suspend fun profile(): Envelope<ProfileDto> = notStubbed("profile")
